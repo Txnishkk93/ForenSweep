@@ -1,0 +1,164 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(OPERATOR)
+  createdAt    DateTime   @default(now())
+  jobs         Job[]
+  auditLogs    AuditLog[]
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  INVESTIGATOR
+}
+
+enum JobType {
+  ERASE
+  RECOVER
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  VERIFYING
+  COMPLETED
+  FAILED
+}
+
+enum DeviceType {
+  HDD
+  SSD
+  USB
+  SD_CARD
+  UNKNOWN
+}
+
+enum EraseMethod {
+  OVERWRITE_SINGLE
+  OVERWRITE_MULTI
+  ATA_SECURE_ERASE
+  NVME_SECURE_FORMAT
+  CRYPTO_ERASE
+  FILE_LEVEL_OVERWRITE
+}
+
+enum ConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Device {
+  id           String     @id @default(uuid())
+  path         String
+  type         DeviceType
+  model        String?
+  serial       String?
+  sizeBytes    BigInt?
+  supportsAta  Boolean    @default(false)
+  supportsNvme Boolean    @default(false)
+  supportsSed  Boolean    @default(false)
+  lastSeenAt   DateTime   @default(now())
+  jobs         Job[]
+
+  @@index([path])
+  @@index([serial])
+}
+
+model Job {
+  id                String          @id @default(uuid())
+  type              JobType
+  status            JobStatus       @default(QUEUED)
+  progress          Int             @default(0)
+  deviceId          String?
+  userId            String
+  eraseMethod       EraseMethod?
+  eraseScope        String?
+  eraseFileList     String?
+  standard          String?
+  verified          Boolean?
+  residualRiskScore Float?
+  residualRiskLevel RiskLevel?
+  scanType          String?
+  sourceImagePath   String?
+  errorMessage      String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  device            Device?         @relation(fields: [deviceId], references: [id])
+  user              User            @relation(fields: [userId], references: [id])
+  certificate       Certificate?
+  recoveredFiles    RecoveredFile[]
+  auditLogs         AuditLog[]
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([status])
+}
+
+model Certificate {
+  id                 String      @id @default(uuid())
+  jobId              String      @unique
+  method             EraseMethod
+  standard           String
+  verificationResult Boolean
+  deviceSnapshot     String
+  contentHash        String
+  prevCertHash       String?
+  signature          String
+  pdfPath            String
+  createdAt          DateTime    @default(now())
+  job                Job         @relation(fields: [jobId], references: [id])
+
+  @@index([jobId])
+}
+
+model RecoveredFile {
+  id              String          @id @default(uuid())
+  jobId           String
+  fileName        String?
+  fileType        String
+  offsetStart     BigInt
+  offsetEnd       BigInt
+  isFragmented    Boolean         @default(false)
+  confidenceScore Float
+  confidenceLevel ConfidenceLevel
+  validationNotes String?
+  storedPath      String
+  createdAt       DateTime        @default(now())
+  job             Job             @relation(fields: [jobId], references: [id])
+
+  @@index([jobId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  jobId     String?
+  action    String
+  detail    String?
+  timestamp DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+  job       Job?     @relation(fields: [jobId], references: [id])
+
+  @@index([userId])
+  @@index([jobId])
+  @@index([timestamp])
+}

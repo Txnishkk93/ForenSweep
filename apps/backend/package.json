@@ -9,9 +9,14 @@
     "dev": "bun run build && bun run start"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "7.0.2"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "dependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@repo/db": "workspace:*",
+    "@prisma/client": "^7.10.0",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1"
   }
 }
