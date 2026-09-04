@@ -23,6 +23,10 @@ import {
   createInternalRoutes,
   internalRoutes,
 } from "./modules/internal/internal.routes.js";
+import {
+  certificateRoutes,
+  internalCertificateRoutes,
+} from "./modules/certificates/certificate.routes.js";
 
 export function createApp(
   options: {
@@ -98,6 +102,10 @@ export function createApp(
       ? createInternalRoutes(options.publisher)
       : internalRoutes,
   );
+  app.use("/internal", internalCertificateRoutes);
+  app.use("/api", certificateRoutes);
+  app.use("/internal", internalCertificateRoutes);
+  app.use("/api", certificateRoutes);
   app.use("/internal", internalRoutes);
   app.use(notFound);
   app.use(errorHandler);

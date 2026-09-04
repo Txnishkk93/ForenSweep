@@ -25,6 +25,10 @@ const rawEnvSchema = z.object({
   CORS_ORIGIN: z.string().url().default("http://localhost:3000"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   WS_PORT: z.coerce.number().int().min(1).max(65535).default(4001),
+  CERT_PUBLIC_KEY_PATH: z
+    .string()
+    .min(1)
+    .default("./secrets/forensweep-ed25519-public.pem"),
 });
 
 const parsed = rawEnvSchema.safeParse(process.env);

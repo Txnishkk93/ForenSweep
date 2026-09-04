@@ -13,6 +13,8 @@ class Config:
     real_device_operations: bool
     chunk_size: int
     sample_count: int
+    cert_private_key_path: Path
+    output_root: Path
 
 
 def load_config() -> Config:
@@ -30,4 +32,6 @@ def load_config() -> Config:
         real_device_operations=False,
         chunk_size=int(os.environ.get("WORKER_CHUNK_SIZE", str(1024 * 1024))),
         sample_count=int(os.environ.get("WORKER_SAMPLE_COUNT", "16")),
+        cert_private_key_path=Path(os.environ.get("CERT_PRIVATE_KEY_PATH", "./secrets/forensweep-ed25519-private.pem")).expanduser().resolve(),
+        output_root=Path(os.environ.get("SAFE_OUTPUT_ROOT", "../../storage/output")).expanduser().resolve(),
     )
