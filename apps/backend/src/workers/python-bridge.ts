@@ -41,3 +41,35 @@ export async function runEraseWithFallback(
     throw error;
   }
 }
+
+export async function runRecoverWithPython(jobId: string): Promise<void> {
+  if (!uuidPattern.test(jobId)) throw new Error("Invalid internal job ID");
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      "python",
+      ["-m", "forensweep_worker.main", "recover", "--job-id", jobId],
+      { shell: false, stdio: "inherit" },
+    );
+    child.once("error", reject);
+    child.once("exit", (code) =>
+      code === 0
+        ? resolve()
+        : reject(
+            new Error(`Python worker exited with code ${code ?? "unknown"}`),
+          ),
+    );
+  });
+}
+
+export async function runRecoverWithFallback(
+  jobId: string,
+  publisher?: EventPublisher,
+): Promise<void> {
+  try {
+    await runRecoverWithPython(jobId);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("ENOENT"))
+      await simulateJob(jobId, "RECOVER", undefined, publisher);
+    else throw error;
+  }
+}

@@ -45,3 +45,6 @@ class WorkerApiClient:
 
     def certificate(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/internal/certificates", payload)
+
+    def recovered_file(self, job_id: str, payload: dict[str, Any]) -> None:
+        self._request("POST", f"/internal/jobs/{job_id}/recovered-files", payload)

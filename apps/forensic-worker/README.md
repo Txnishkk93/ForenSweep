@@ -19,3 +19,22 @@ python -m forensweep_worker.main erase --job-id <uuid>
 `CERT_PRIVATE_KEY_PATH` is the only source for the signing private key. The development key generator writes local files under ignored `secrets` directories; never commit those files. Set the matching public key path as the backend `CERT_PUBLIC_KEY_PATH`. The backend certificate API re-canonicalizes payloads and verifies Ed25519 signatures.
 
 The ATA, NVMe, cryptographic, and file-level erase modules are explicit disabled stubs. There is no physical-drive access, Python process execution beyond this controlled module entry point, recovery execution, or shell invocation.
+
+## Recovery MVP
+
+Create a reproducible, copyright-free image containing synthetic JPEG and PDF markers:
+
+```bash
+python scripts/create_recovery_sample_image.py
+python -m forensweep_worker.main recover --job-id <recovery-job-uuid>
+```
+
+The registered database device or managed image reference must point to that `.img` under `SAFE_IMAGE_ROOT`. The worker reads the source only and writes candidates under `SAFE_OUTPUT_ROOT/recovery/<job-id>`.
+
+End-to-end manual flow:
+
+1. Start PostgreSQL, Redis, backend, WebSocket service, and the backend worker.
+2. Log in and create a recovery job using a registered device ID or managed image ID.
+3. Confirm the recovery job reaches `COMPLETED` and inspect `GET /api/jobs/<job-id>/recovered-files`.
+4. Candidate records contain string offsets, SHA-256, validation notes, score breakdown, confidence, and a job-scoped stored path.
+5. Delete the synthetic image and output directory when finished; never use this tool with evidence outside the configured safe image root.

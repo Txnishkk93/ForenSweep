@@ -15,6 +15,10 @@ class Config:
     sample_count: int
     cert_private_key_path: Path
     output_root: Path
+    max_image_size: int
+    max_candidates: int
+    max_duration_seconds: int
+    max_extraction_size: int
 
 
 def load_config() -> Config:
@@ -34,4 +38,8 @@ def load_config() -> Config:
         sample_count=int(os.environ.get("WORKER_SAMPLE_COUNT", "16")),
         cert_private_key_path=Path(os.environ.get("CERT_PRIVATE_KEY_PATH", "./secrets/forensweep-ed25519-private.pem")).expanduser().resolve(),
         output_root=Path(os.environ.get("SAFE_OUTPUT_ROOT", "../../storage/output")).expanduser().resolve(),
+        max_image_size=int(os.environ.get("MAX_IMAGE_SIZE", str(1024 * 1024 * 1024))),
+        max_candidates=int(os.environ.get("MAX_CANDIDATES", "100")),
+        max_duration_seconds=int(os.environ.get("MAX_SCAN_DURATION_SECONDS", "60")),
+        max_extraction_size=int(os.environ.get("MAX_CANDIDATE_EXTRACTION_SIZE", str(50 * 1024 * 1024))),
     )
