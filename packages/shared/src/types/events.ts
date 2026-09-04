@@ -19,7 +19,10 @@ export const jobEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("job:warning"), payload: jobWarningEventSchema }),
   z.object({ type: z.literal("job:failed"), payload: workerCompletionSchema }),
-  z.object({ type: z.literal("recovered:file"), payload: recoveredFileResultSchema }),
+  z.object({
+    type: z.literal("recovered:file"),
+    payload: recoveredFileResultSchema,
+  }),
 ]);
 
 export type JobEvent = z.infer<typeof jobEventSchema>;

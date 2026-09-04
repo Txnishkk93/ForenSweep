@@ -9,7 +9,7 @@ from typing import Any
 from .confidence import score_confidence
 from .signatures import SUPPORTED, Signature
 from .stream_reader import read_chunks
-from .validators import validate_jpeg, validate_pdf
+from .validators import validate_jpeg, validate_pdf, validate_png, validate_zip
 
 _FILENAME = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -63,13 +63,36 @@ def _extract(source: Path, signature: Signature, offset: int, output_dir: Path, 
     if not data: return None
     path = output_dir / _safe_name(signature.kind, offset, signature.extension)
     path.write_bytes(data)
-    validation = validate_jpeg(path) if signature.kind == "JPEG" else validate_pdf(path)
+    if signature.kind == "JPEG":
+        validation = validate_jpeg(path)
+    elif signature.kind == "PDF":
+        validation = validate_pdf(path)
+    elif signature.kind == "PNG":
+        validation = validate_png(path)
+    else:
+        validation = validate_zip(path)
+    file_type = "DOCX" if signature.kind == "ZIP" and validation.get("isDocx") else signature.kind
+    if file_type == "DOCX":
+        docx_path = path.with_suffix(".docx")
+        path.rename(docx_path)
+        path = docx_path
     structure = bool(validation.get("valid"))
     scoring = score_confidence(signature=True, footer=footer_found, structure=structure, parser_decode=bool(validation.get("valid")), truncated=truncated, fragmented=False)
+    preview_path = None
+    if file_type == "PNG" and validation.get("valid"):
+        try:
+            from PIL import Image
+            preview = path.with_name(f"{path.stem}_preview.jpg")
+            with Image.open(path) as image:
+                image.thumbnail((320, 320))
+                image.convert("RGB").save(preview, format="JPEG", quality=85)
+            preview_path = str(preview)
+        except Exception:
+            preview_path = None
     return {
         "fileName": path.name,
-        "fileType": signature.kind,
-        "mimeType": "image/jpeg" if signature.kind == "JPEG" else "application/pdf",
+        "fileType": file_type,
+        "mimeType": {"JPEG": "image/jpeg", "PDF": "application/pdf", "PNG": "image/png", "ZIP": "application/zip", "DOCX": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}[file_type],
         "offsetStart": str(offset),
         "offsetEnd": str(offset + len(data)),
         "isFragmented": False,
@@ -81,4 +104,7 @@ def _extract(source: Path, signature: Signature, offset: int, output_dir: Path, 
         "validationNotes": {"validation": validation, "reasons": scoring["reasons"]},
         "sha256": hashlib.sha256(data).hexdigest(),
         "storedPath": str(path),
+        "previewPath": preview_path,
+        "previewAvailable": preview_path is not None,
+        "fragmentationStatus": "NOT_ATTEMPTED",
     }
