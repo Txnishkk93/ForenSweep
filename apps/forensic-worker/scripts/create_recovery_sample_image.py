@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from io import BytesIO
 from pathlib import Path
 
-JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")
-PDF = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n"
+from PIL import Image
+from reportlab.pdfgen.canvas import Canvas
 
 
 def main() -> int:
@@ -13,8 +14,14 @@ def main() -> int:
     args = parser.parse_args()
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
-    target = root / "recovery-sample.img"
-    target.write_bytes(b"ForenSweep synthetic sample\n" + JPEG + b"\n" + PDF)
+    image_buffer = BytesIO()
+    Image.new("RGB", (320, 200), "steelblue").save(image_buffer, format="JPEG", quality=90)
+    pdf_buffer = BytesIO()
+    canvas = Canvas(pdf_buffer)
+    canvas.drawString(72, 720, "ForenSweep synthetic recovery sample")
+    canvas.save()
+    target = root / "demo-safe-image.img"
+    target.write_bytes(b"ForenSweep synthetic sample\n" + image_buffer.getvalue() + b"\n" + pdf_buffer.getvalue())
     print(f"Created synthetic recovery sample at {target}")
     return 0
 
