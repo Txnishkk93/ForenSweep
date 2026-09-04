@@ -42,3 +42,6 @@ class WorkerApiClient:
 
     def audit(self, job_id: str, payload: dict[str, Any]) -> None:
         self._request("POST", f"/internal/jobs/{job_id}/audit", payload)
+
+    def certificate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/internal/certificates", payload)

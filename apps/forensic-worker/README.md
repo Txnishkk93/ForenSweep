@@ -11,8 +11,11 @@ python -m venv .venv
 .venv\\Scripts\\Activate.ps1
 pip install -e .
 Copy-Item .env.example .env
+python scripts/generate_dev_key.py
 python scripts/create_demo_image.py --size-mb 1
 python -m forensweep_worker.main erase --job-id <uuid>
 ```
+
+`CERT_PRIVATE_KEY_PATH` is the only source for the signing private key. The development key generator writes local files under ignored `secrets` directories; never commit those files. Set the matching public key path as the backend `CERT_PUBLIC_KEY_PATH`. The backend certificate API re-canonicalizes payloads and verifies Ed25519 signatures.
 
 The ATA, NVMe, cryptographic, and file-level erase modules are explicit disabled stubs. There is no physical-drive access, Python process execution beyond this controlled module entry point, recovery execution, or shell invocation.

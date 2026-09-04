@@ -7,7 +7,7 @@ name = "forensweep-worker"
 version = "0.1.0"
 description = "Safe image-only ForenSweep forensic worker scaffold"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["cryptography>=42", "reportlab>=4"]
 
 [tool.ruff]
 line-length = 100

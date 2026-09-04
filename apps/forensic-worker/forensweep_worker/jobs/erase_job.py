@@ -8,6 +8,8 @@ from ..config import Config
 from ..models import WorkerContext
 from ..erase.simulated import simulate_overwrite
 from ..erase.verification import verify_overwrite, overwrite_pattern
+from ..certificate import create_certificate
+from datetime import datetime, timezone
 
 
 def validate_image_target(raw_path: str, safe_root: Path) -> Path:
@@ -25,6 +27,7 @@ def validate_image_target(raw_path: str, safe_root: Path) -> Path:
 
 
 def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
+    started_at = datetime.now(timezone.utc)
     context_data = client.context(job_id)["data"]
     job = context_data["job"]
     device = context_data.get("device")
@@ -42,3 +45,6 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
     client.progress(job_id, {"stage": "VERIFYING", "progress": 99, "currentPass": total_passes, "totalPasses": total_passes, "progressDetail": {"simulated": True}})
     verification = verify_overwrite(image_path, overwrite_pattern(total_passes), config.sample_count)
     client.complete(job_id, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "verificationData": verification.details})
+    if verification.verified:
+        certificate = create_certificate(context_data, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "details": verification.details}, config, started_at)
+        client.certificate(certificate)
