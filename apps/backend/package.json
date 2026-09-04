@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@repo/db": "workspace:*",
+    "@repo/crypto": "workspace:*",
+    "@repo/device-policy": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@prisma/client": "^7.10.0",

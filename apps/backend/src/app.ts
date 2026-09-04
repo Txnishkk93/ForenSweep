@@ -8,8 +8,17 @@ import { errorHandler } from "./middleware/error-handler.js";
 import { notFound } from "./middleware/not-found.js";
 import { requestId } from "./middleware/request-id.js";
 import type { UserStore } from "./modules/auth/auth.service.js";
+import {
+  createDeviceRoutes,
+  createErasePreviewRoutes,
+  deviceRoutes,
+  erasePreviewRoutes,
+} from "./modules/devices/device.routes.js";
+import type { DeviceStore } from "./modules/devices/device.service.js";
 
-export function createApp(options: { userStore?: UserStore } = {}): Express {
+export function createApp(
+  options: { userStore?: UserStore; deviceStore?: DeviceStore } = {},
+): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(requestId);
@@ -21,6 +30,18 @@ export function createApp(options: { userStore?: UserStore } = {}): Express {
     }),
   );
   app.use(express.json({ limit: "1mb" }));
+  app.use(
+    "/api/devices",
+    options.deviceStore
+      ? createDeviceRoutes(options.deviceStore)
+      : deviceRoutes,
+  );
+  app.use(
+    "/api/jobs",
+    options.deviceStore
+      ? createErasePreviewRoutes(options.deviceStore)
+      : erasePreviewRoutes,
+  );
   app.use((req, res, next) => {
     const startedAt = Date.now();
     res.on("finish", () =>

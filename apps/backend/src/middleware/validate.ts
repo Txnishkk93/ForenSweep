@@ -23,3 +23,25 @@ export function validateBody<T extends z.ZodType>(schema: T): RequestHandler {
     next();
   };
 }
+
+export function validateParams<T extends z.ZodType>(schema: T): RequestHandler {
+  return (req, _res, next) => {
+    const result = schema.safeParse(req.params);
+    if (!result.success) {
+      next(
+        new AppError(
+          400,
+          "VALIDATION_ERROR",
+          "Request validation failed",
+          result.error.issues.map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          })),
+        ),
+      );
+      return;
+    }
+    req.params = result.data as typeof req.params;
+    next();
+  };
+}

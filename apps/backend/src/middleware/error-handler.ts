@@ -39,15 +39,13 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     statusCode: appError.statusCode,
   });
   const details = appError.statusCode < 500 ? appError.details : undefined;
-  res
-    .status(appError.statusCode)
-    .json({
-      success: false,
-      error: {
-        code: appError.code,
-        message: appError.message,
-        ...(details === undefined ? {} : { details }),
-      },
-      meta: { requestId },
-    });
+  res.status(appError.statusCode).json({
+    success: false,
+    error: {
+      code: appError.code,
+      message: appError.message,
+      ...(details === undefined ? {} : { details }),
+    },
+    meta: { requestId },
+  });
 };

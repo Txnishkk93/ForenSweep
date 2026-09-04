@@ -14,7 +14,9 @@
       "name": "backend",
       "dependencies": {
         "@prisma/client": "^7.10.0",
+        "@repo/crypto": "workspace:*",
         "@repo/db": "workspace:*",
+        "@repo/device-policy": "workspace:*",
         "@repo/shared": "workspace:*",
         "@repo/typescript-config": "workspace:*",
         "@types/express": "^5.0.6",
@@ -31,6 +33,7 @@
         "@types/bun": "latest",
         "@types/cors": "^2.8.17",
         "@types/jsonwebtoken": "^9.0.9",
+        "eslint": "10.9.1",
         "typescript": "7.0.2",
       },
     },
