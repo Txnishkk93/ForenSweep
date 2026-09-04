@@ -18,6 +18,11 @@ import type { DeviceStore } from "./modules/devices/device.service.js";
 import { jobRoutes, createJobRoutes } from "./modules/jobs/job.routes.js";
 import type { JobStore } from "./modules/jobs/job.service.js";
 import type { JobQueue } from "./lib/queues.js";
+import type { EventPublisher } from "./lib/publisher.js";
+import {
+  createInternalRoutes,
+  internalRoutes,
+} from "./modules/internal/internal.routes.js";
 
 export function createApp(
   options: {
@@ -25,6 +30,7 @@ export function createApp(
     deviceStore?: DeviceStore;
     jobStore?: JobStore;
     jobQueue?: JobQueue;
+    publisher?: EventPublisher;
   } = {},
 ): Express {
   const app = express();
@@ -86,6 +92,13 @@ export function createApp(
     options.userStore ? createAuthRoutes(options.userStore) : authRoutes,
   );
   app.use("/api/admin", adminRoutes);
+  app.use(
+    "/internal",
+    options.publisher
+      ? createInternalRoutes(options.publisher)
+      : internalRoutes,
+  );
+  app.use("/internal", internalRoutes);
   app.use(notFound);
   app.use(errorHandler);
   return app;

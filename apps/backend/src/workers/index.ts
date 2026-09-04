@@ -3,12 +3,13 @@ import { Redis } from "ioredis";
 import { env } from "../config/env.js";
 import { simulateJob } from "./simulation.js";
 import { createRedisPublisher } from "../lib/publisher.js";
+import { runEraseWithFallback } from "./python-bridge.js";
 
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const publisher = createRedisPublisher(env.REDIS_URL);
 const eraseWorker = new Worker(
   "forensweep-erase",
-  async (job) => simulateJob(job.data.jobId, "ERASE", undefined, publisher),
+  async (job) => runEraseWithFallback(job.data.jobId, publisher),
   { connection },
 );
 const recoverWorker = new Worker(
