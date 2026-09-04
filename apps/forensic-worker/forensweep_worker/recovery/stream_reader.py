@@ -21,6 +21,7 @@ def read_chunks(path: Path, chunk_size: int, overlap: int = 16) -> Iterator[Chun
             block = handle.read(chunk_size)
             if not block:
                 break
-            yield Chunk(offset=max(offset - len(carry), 0), data=carry + block)
+            combined = carry + block
+            yield Chunk(offset=max(offset - len(carry), 0), data=combined)
             offset += len(block)
-            carry = block[-overlap:]
+            carry = combined[-overlap:]

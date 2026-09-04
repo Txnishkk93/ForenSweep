@@ -27,7 +27,14 @@ export const workerCompletionSchema = z.object({
 
 export const jobStatusEventSchema = z.object({
   jobId: z.uuid(),
-  status: z.enum(["QUEUED", "RUNNING", "VERIFYING", "COMPLETED", "FAILED", "CANCELLED"]),
+  status: z.enum([
+    "QUEUED",
+    "RUNNING",
+    "VERIFYING",
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+  ]),
   stage: z.enum(JOB_STAGES),
   progress: z.number().int().min(0).max(100),
 });

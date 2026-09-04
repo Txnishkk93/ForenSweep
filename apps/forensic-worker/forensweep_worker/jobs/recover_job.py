@@ -31,11 +31,11 @@ def run_recovery(job_id: str, config: Config, client: WorkerApiClient) -> None:
     if source.stat().st_size > config.max_image_size:
         raise ValueError("Source image exceeds the configured maximum size")
     output_dir = _job_directory(config.output_root, job_id)
-    client.audit(job_id, {"action": "RECOVERY_STARTED", "detail": {"formats": ["JPEG", "PDF"], "simulated": True}})
-    client.progress(job_id, {"stage": "CARVING", "progress": 1, "progressDetail": {"simulated": True, "formats": ["JPEG", "PDF"]}})
+    client.audit(job_id, {"action": "RECOVERY_STARTED", "detail": {"formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"], "simulated": True}})
+    client.progress(job_id, {"stage": "CARVING", "progress": 1, "progressDetail": {"simulated": True, "formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"]}})
     results = scan_and_carve(source, output_dir, chunk_size=config.chunk_size, max_candidates=config.max_candidates, max_duration_seconds=config.max_duration_seconds, max_extraction_size=config.max_extraction_size)
     for result in results:
         client.recovered_file(job_id, result)
     client.progress(job_id, {"stage": "VALIDATING", "progress": 99, "progressDetail": {"simulated": True, "candidateCount": len(results)}})
-    client.complete(job_id, {"verified": True, "verificationData": {"recoveredCandidateCount": len(results), "formats": ["JPEG", "PDF"]}})
+    client.complete(job_id, {"verified": True, "verificationData": {"recoveredCandidateCount": len(results), "formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"]}})
     client.audit(job_id, {"action": "RECOVERY_COMPLETED", "detail": {"candidateCount": len(results), "simulated": True}})

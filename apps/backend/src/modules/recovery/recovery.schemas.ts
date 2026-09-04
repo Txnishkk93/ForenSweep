@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const recoveredFileSchema = z.object({
   fileName: z.string().nullable().optional(),
-  fileType: z.enum(["JPEG", "PDF"]),
+  fileType: z.enum(["JPEG", "PDF", "PNG", "ZIP", "DOCX"]),
   mimeType: z.string().nullable().optional(),
   offsetStart: z.string().regex(/^\d+$/),
   offsetEnd: z.string().regex(/^\d+$/),
@@ -19,4 +19,6 @@ export const recoveredFileSchema = z.object({
     .optional(),
   storedPath: z.string().min(1),
   previewPath: z.string().optional(),
+  previewAvailable: z.boolean().optional(),
+  fragmentationStatus: z.literal("NOT_ATTEMPTED").optional(),
 });

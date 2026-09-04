@@ -4,7 +4,7 @@ export const recoveredFileResultSchema = z.object({
   id: z.uuid(),
   jobId: z.uuid(),
   fileName: z.string().nullable(),
-  fileType: z.string(),
+  fileType: z.enum(["JPEG", "PDF", "PNG", "ZIP", "DOCX"]),
   mimeType: z.string().nullable().optional(),
   offsetStart: z.string().regex(/^\\d+$/),
   offsetEnd: z.string().regex(/^\\d+$/),
@@ -18,6 +18,8 @@ export const recoveredFileResultSchema = z.object({
   sha256: z.string().nullable().optional(),
   storedPath: z.string(),
   previewPath: z.string().nullable().optional(),
+  previewAvailable: z.boolean().optional(),
+  fragmentationStatus: z.literal("NOT_ATTEMPTED").optional(),
 });
 
 export type RecoveredFileResult = z.infer<typeof recoveredFileResultSchema>;
