@@ -5,18 +5,32 @@
   "private": true,
   "scripts": {
     "build": "tsc -b",
-    "start": "node dist/index.js",
-    "dev": "bun run build && bun run start"
+    "start": "node dist/server.js",
+    "dev": "bun run build && bun run start",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "bun test src"
   },
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@types/bcryptjs": "^2.4.6",
     "@types/bun": "latest",
+    "@types/cors": "^2.8.17",
+    "@types/jsonwebtoken": "^9.0.9",
+    "eslint": "10.9.1",
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@repo/typescript-config": "workspace:*",
     "@repo/db": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
     "@prisma/client": "^7.10.0",
     "@types/express": "^5.0.6",
-    "express": "^5.2.1"
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^4.1.0"
   }
 }
