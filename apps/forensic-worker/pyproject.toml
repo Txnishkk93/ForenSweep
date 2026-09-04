@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forensweep-worker"
+version = "0.1.0"
+description = "Safe image-only ForenSweep forensic worker scaffold"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+
+[tool.pyright]
+include = ["forensweep_worker"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+
+[project.scripts]
+forensweep-worker = "forensweep_worker.main:main"

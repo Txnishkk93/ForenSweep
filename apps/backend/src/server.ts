@@ -4,8 +4,11 @@ import { env } from "./config/env.js";
 import { prisma } from "./lib/prisma.js";
 import { logInfo } from "./lib/logger.js";
 import { closeQueues, jobQueue } from "./lib/queues.js";
+import { createRedisPublisher } from "./lib/publisher.js";
 
-const server = createServer(createApp({ jobQueue }));
+const server = createServer(
+  createApp({ jobQueue, publisher: createRedisPublisher(env.REDIS_URL) }),
+);
 server.listen(env.PORT, () =>
   logInfo("server_started", { port: env.PORT, environment: env.NODE_ENV }),
 );
