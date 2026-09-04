@@ -7,7 +7,7 @@ from pathlib import Path
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create a small safe ForenSweep demo image")
     parser.add_argument("--root", type=Path, default=Path("../../storage/safe-images"))
-    parser.add_argument("--name", default="demo.img")
+    parser.add_argument("--name", default="demo-hdd.img")
     parser.add_argument("--size-mb", type=int, default=1)
     args = parser.parse_args()
     if args.size_mb < 1 or args.size_mb > 100:

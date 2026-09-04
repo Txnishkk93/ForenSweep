@@ -18,8 +18,6 @@ import {
 } from "./certificate.schemas.js";
 
 const idSchema = z.object({ id: z.uuid() });
-const internalJobSchema = z.object({ jobId: z.uuid() });
-
 export const internalCertificateRoutes: RouterType = Router();
 internalCertificateRoutes.use(requireWorkerToken);
 internalCertificateRoutes.post(
