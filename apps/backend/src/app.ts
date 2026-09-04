@@ -17,12 +17,14 @@ import {
 import type { DeviceStore } from "./modules/devices/device.service.js";
 import { jobRoutes, createJobRoutes } from "./modules/jobs/job.routes.js";
 import type { JobStore } from "./modules/jobs/job.service.js";
+import type { JobQueue } from "./lib/queues.js";
 
 export function createApp(
   options: {
     userStore?: UserStore;
     deviceStore?: DeviceStore;
     jobStore?: JobStore;
+    jobQueue?: JobQueue;
   } = {},
 ): Express {
   const app = express();
@@ -50,7 +52,9 @@ export function createApp(
   );
   app.use(
     "/api/jobs",
-    options.jobStore ? createJobRoutes(options.jobStore) : jobRoutes,
+    options.jobStore || options.jobQueue
+      ? createJobRoutes(options.jobStore, options.jobQueue)
+      : jobRoutes,
   );
   app.use((req, res, next) => {
     const startedAt = Date.now();

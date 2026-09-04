@@ -1,0 +1,34 @@
+import { Worker } from "bullmq";
+import { Redis } from "ioredis";
+import { env } from "../config/env.js";
+import { simulateJob } from "./simulation.js";
+import { createRedisPublisher } from "../lib/publisher.js";
+
+const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const publisher = createRedisPublisher(env.REDIS_URL);
+const eraseWorker = new Worker(
+  "forensweep-erase",
+  async (job) => simulateJob(job.data.jobId, "ERASE", undefined, publisher),
+  { connection },
+);
+const recoverWorker = new Worker(
+  "forensweep-recover",
+  async (job) => simulateJob(job.data.jobId, "RECOVER", undefined, publisher),
+  { connection },
+);
+
+console.info(
+  JSON.stringify({ level: "info", message: "simulation_workers_started" }),
+);
+
+async function shutdown(): Promise<void> {
+  await Promise.all([
+    eraseWorker.close(),
+    recoverWorker.close(),
+    connection.quit(),
+  ]);
+  process.exit(0);
+}
+
+process.once("SIGINT", () => void shutdown());
+process.once("SIGTERM", () => void shutdown());

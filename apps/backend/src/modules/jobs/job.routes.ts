@@ -9,10 +9,14 @@ import {
   jobIdParamsSchema,
 } from "./job.schemas.js";
 import type { JobStore } from "./job.service.js";
+import type { JobQueue } from "../../lib/queues.js";
 
-export function createJobRoutes(store?: JobStore): RouterType {
+export function createJobRoutes(
+  store?: JobStore,
+  queue?: JobQueue,
+): RouterType {
   const routes = Router();
-  const controller = createJobController(store);
+  const controller = createJobController(store, queue);
   routes.use(requireAuth);
   routes.post(
     "/erase",

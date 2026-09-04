@@ -6,10 +6,28 @@ Copy `.env.example` to `.env` and set `DATABASE_URL`, `JWT_SECRET`, `INTERNAL_WO
 
 ```bash
 bun install
+bun run --cwd packages/db db:generate
 bun run --cwd packages/db db:migrate
 bun run --cwd packages/db db:seed
 bun run --cwd apps/backend dev
+bun run --cwd apps/backend worker
+bun run --cwd apps/ws dev
 bun run --cwd apps/backend test
+```
+
+Start local infrastructure with `docker compose up -d postgres redis`. The worker and WebSocket process require `REDIS_URL`; queue payloads contain only internal job IDs. All processing in this phase is simulation-only.
+
+Run the simulation worker separately with `bun run --cwd apps/backend worker`, and run the WebSocket service with `bun run --cwd apps/ws dev`.
+
+Example event:
+
+```json
+{
+  "jobId": "00000000-0000-4000-8000-000000000001",
+  "stage": "OVERWRITING",
+  "progress": 40,
+  "message": "Simulation stage: OVERWRITING"
+}
 ```
 
 Endpoints:

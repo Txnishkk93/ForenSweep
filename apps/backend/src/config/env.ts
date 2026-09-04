@@ -24,6 +24,7 @@ const rawEnvSchema = z.object({
   REAL_DEVICE_OPERATIONS: booleanFromString.default(false),
   CORS_ORIGIN: z.string().url().default("http://localhost:3000"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  WS_PORT: z.coerce.number().int().min(1).max(65535).default(4001),
 });
 
 const parsed = rawEnvSchema.safeParse(process.env);

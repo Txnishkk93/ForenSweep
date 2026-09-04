@@ -99,7 +99,22 @@ const jobStore = {
     },
   },
 } as never;
+const queuedJobs: Array<{ name: string; data: Record<string, unknown> }> = [];
+const testQueue = {
+  addErase: async (jobId: string) => {
+    queuedJobs.push({ name: "erase", data: { jobId } });
+  },
+  addRecover: async (jobId: string) => {
+    queuedJobs.push({ name: "recover", data: { jobId } });
+  },
+};
 const jobApp = createApp({ userStore: fakeStore, deviceStore, jobStore });
+const jobAppWithQueue = createApp({
+  userStore: fakeStore,
+  deviceStore,
+  jobStore,
+  jobQueue: testQueue,
+});
 
 async function request(
   targetApp: ReturnType<typeof createApp>,
@@ -496,4 +511,40 @@ test("job audit events contain hash-chain fields", async () => {
       (audit) => audit.action === "ERASE_APPROVED" && audit.previousHash,
     ),
   );
+});
+
+test("approved erase and recovery creation enqueue internal job IDs", async () => {
+  const eraseResponse = await request(jobAppWithQueue, "/api/jobs/erase", {
+    method: "POST",
+    headers: authHeader("OPERATOR"),
+    body: JSON.stringify({
+      deviceId: baseDevice.id,
+      eraseScope: "WHOLE_DRIVE",
+      typeToConfirm: baseDevice.serial,
+    }),
+  });
+  const eraseBody = (await eraseResponse.json()) as { data: { id: string } };
+  assert.equal(
+    queuedJobs.some((entry) => entry.name === "erase"),
+    false,
+  );
+  await request(jobAppWithQueue, `/api/jobs/${eraseBody.data.id}/approve`, {
+    method: "POST",
+    headers: authHeader("ADMIN"),
+  });
+  const recoveryResponse = await request(jobAppWithQueue, "/api/jobs/recover", {
+    method: "POST",
+    headers: authHeader("INVESTIGATOR"),
+    body: JSON.stringify({ imageId: "00000000-0000-4000-8000-000000000999" }),
+  });
+  assert.equal(recoveryResponse.status, 201);
+  assert.ok(
+    queuedJobs.every(
+      (entry) =>
+        Object.keys(entry.data).length === 1 &&
+        typeof entry.data.jobId === "string",
+    ),
+  );
+  assert.ok(queuedJobs.some((entry) => entry.name === "erase"));
+  assert.ok(queuedJobs.some((entry) => entry.name === "recover"));
 });

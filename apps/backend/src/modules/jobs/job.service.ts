@@ -8,6 +8,7 @@ import { prisma } from "../../lib/prisma.js";
 import { appendAuditEvent, type AuditStore } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { DeviceRecord } from "../devices/device.service.js";
+import type { JobQueue } from "../../lib/queues.js";
 
 export type JobStore = Pick<typeof prisma, "device" | "job" | "auditLog">;
 
@@ -68,6 +69,7 @@ export async function createEraseJob(
   input: CreateEraseJobInput,
   userId: string,
   store: JobStore = prisma,
+  queue?: JobQueue,
 ) {
   const device = await loadDevice(input.deviceId, store);
   assertSafeDevice(device);
@@ -132,6 +134,7 @@ export async function approveEraseJob(
   id: string,
   approverId: string,
   store: JobStore = prisma,
+  queue?: JobQueue,
 ) {
   const job = await store.job.findUnique({ where: { id } });
   if (!job) throw new AppError(404, "JOB_NOT_FOUND", "Job not found");
@@ -152,7 +155,7 @@ export async function approveEraseJob(
     action: "ERASE_APPROVED",
     detail: { approvedAt: approvedAt.toISOString() },
   });
-  // TODO: enqueue the approved job when the worker/queue integration is implemented.
+  if (queue) await queue.addErase(updated.id);
   return updated;
 }
 
@@ -197,6 +200,7 @@ export async function createRecoveryJob(
   input: CreateRecoveryJobInput,
   userId: string,
   store: JobStore = prisma,
+  queue?: JobQueue,
 ) {
   const device = input.deviceId
     ? await loadDevice(input.deviceId, store)
@@ -229,6 +233,7 @@ export async function createRecoveryJob(
       scanType: input.scanType,
     },
   });
+  if (queue) await queue.addRecover(job.id);
   return job;
 }
 

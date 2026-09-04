@@ -11,19 +11,25 @@ import {
   listJobs,
   type JobStore,
 } from "./job.service.js";
+import type { JobQueue } from "../../lib/queues.js";
 
-export function createJobController(store?: JobStore) {
+export function createJobController(store?: JobStore, queue?: JobQueue) {
   return {
     createErase: (async (req, res) =>
       sendCreated(
         res,
-        await createEraseJob(req.body, req.auth!.userId, store),
+        await createEraseJob(req.body, req.auth!.userId, store, queue),
         { requestId: req.requestId },
       )) as RequestHandler,
     approve: (async (req, res) =>
       sendSuccess(
         res,
-        await approveEraseJob(String(req.params.id), req.auth!.userId, store),
+        await approveEraseJob(
+          String(req.params.id),
+          req.auth!.userId,
+          store,
+          queue,
+        ),
         200,
         { requestId: req.requestId },
       )) as RequestHandler,
@@ -42,7 +48,7 @@ export function createJobController(store?: JobStore) {
     recover: (async (req, res) =>
       sendCreated(
         res,
-        await createRecoveryJob(req.body, req.auth!.userId, store),
+        await createRecoveryJob(req.body, req.auth!.userId, store, queue),
         { requestId: req.requestId },
       )) as RequestHandler,
     list: (async (req, res) =>

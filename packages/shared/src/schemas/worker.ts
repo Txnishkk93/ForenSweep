@@ -25,5 +25,19 @@ export const workerCompletionSchema = z.object({
   certificatePayload: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const jobStatusEventSchema = z.object({
+  jobId: z.uuid(),
+  status: z.enum(["QUEUED", "RUNNING", "VERIFYING", "COMPLETED", "FAILED", "CANCELLED"]),
+  stage: z.enum(JOB_STAGES),
+  progress: z.number().int().min(0).max(100),
+});
+
+export const jobWarningEventSchema = z.object({
+  jobId: z.uuid(),
+  message: z.string().min(1),
+});
+
 export type WorkerProgress = z.infer<typeof workerProgressSchema>;
 export type WorkerCompletion = z.infer<typeof workerCompletionSchema>;
+export type JobStatusEvent = z.infer<typeof jobStatusEventSchema>;
+export type JobWarningEvent = z.infer<typeof jobWarningEventSchema>;

@@ -40,6 +40,7 @@ enum JobStatus {
 
 enum JobStage {
   QUEUED
+  RUNNING
   DEVICE_PROFILED
   WAITING_FOR_APPROVAL
   OVERWRITING
