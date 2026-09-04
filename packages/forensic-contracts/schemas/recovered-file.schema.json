@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forensweep.local/schemas/recovered-file.schema.json",
+  "type": "object",
+  "required": [
+    "id",
+    "jobId",
+    "fileType",
+    "offsetStart",
+    "offsetEnd",
+    "isFragmented",
+    "confidenceScore",
+    "confidenceLevel",
+    "storedPath"
+  ],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "jobId": { "type": "string", "format": "uuid" },
+    "fileName": { "type": ["string", "null"] },
+    "fileType": { "type": "string" },
+    "offsetStart": { "type": "string", "pattern": "^[0-9]+$" },
+    "offsetEnd": { "type": "string", "pattern": "^[0-9]+$" },
+    "isFragmented": { "type": "boolean" },
+    "confidenceScore": { "type": "number", "minimum": 0, "maximum": 1 },
+    "confidenceLevel": { "enum": ["HIGH", "MEDIUM", "LOW"] },
+    "validationNotes": { "type": ["string", "null"] },
+    "storedPath": { "type": "string" }
+  },
+  "additionalProperties": false
+}

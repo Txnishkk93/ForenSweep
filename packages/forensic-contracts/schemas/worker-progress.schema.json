@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forensweep.local/schemas/worker-progress.schema.json",
+  "type": "object",
+  "required": ["jobId", "stage", "progress"],
+  "properties": {
+    "jobId": { "type": "string", "format": "uuid" },
+    "stage": {
+      "enum": ["QUEUED", "RUNNING", "VERIFYING", "COMPLETED", "FAILED"]
+    },
+    "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "message": { "type": "string" },
+    "bytesProcessed": { "type": "string", "pattern": "^[0-9]+$" },
+    "bytesTotal": { "type": "string", "pattern": "^[0-9]+$" }
+  },
+  "additionalProperties": false
+}

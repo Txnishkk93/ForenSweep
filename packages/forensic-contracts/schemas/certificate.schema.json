@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forensweep.local/schemas/certificate.schema.json",
+  "type": "object",
+  "required": [
+    "certificateId",
+    "jobId",
+    "method",
+    "standard",
+    "verificationResult",
+    "deviceSnapshot",
+    "contentHash",
+    "createdAt"
+  ],
+  "properties": {
+    "certificateId": { "type": "string", "format": "uuid" },
+    "jobId": { "type": "string", "format": "uuid" },
+    "method": { "type": "string" },
+    "standard": { "type": "string" },
+    "verificationResult": { "type": "boolean" },
+    "deviceSnapshot": { "type": "object" },
+    "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "previousCertificateHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

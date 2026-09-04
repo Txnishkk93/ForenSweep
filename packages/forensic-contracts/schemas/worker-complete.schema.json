@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forensweep.local/schemas/worker-complete.schema.json",
+  "type": "object",
+  "required": ["jobId", "success", "verified", "completedAt"],
+  "properties": {
+    "jobId": { "type": "string", "format": "uuid" },
+    "success": { "type": "boolean" },
+    "verified": { "type": "boolean" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "errorMessage": { "type": "string" },
+    "certificatePayload": { "type": "object" }
+  },
+  "additionalProperties": false
+}
