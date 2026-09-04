@@ -15,9 +15,15 @@ import {
   erasePreviewRoutes,
 } from "./modules/devices/device.routes.js";
 import type { DeviceStore } from "./modules/devices/device.service.js";
+import { jobRoutes, createJobRoutes } from "./modules/jobs/job.routes.js";
+import type { JobStore } from "./modules/jobs/job.service.js";
 
 export function createApp(
-  options: { userStore?: UserStore; deviceStore?: DeviceStore } = {},
+  options: {
+    userStore?: UserStore;
+    deviceStore?: DeviceStore;
+    jobStore?: JobStore;
+  } = {},
 ): Express {
   const app = express();
   app.disable("x-powered-by");
@@ -41,6 +47,10 @@ export function createApp(
     options.deviceStore
       ? createErasePreviewRoutes(options.deviceStore)
       : erasePreviewRoutes,
+  );
+  app.use(
+    "/api/jobs",
+    options.jobStore ? createJobRoutes(options.jobStore) : jobRoutes,
   );
   app.use((req, res, next) => {
     const startedAt = Date.now();

@@ -1,0 +1,54 @@
+import { Router, type Router as RouterType } from "express";
+import { asyncHandler } from "../../middleware/async-handler.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { validateBody, validateParams } from "../../middleware/validate.js";
+import { createJobController } from "./job.controller.js";
+import {
+  createEraseJobSchema,
+  createRecoveryJobSchema,
+  jobIdParamsSchema,
+} from "./job.schemas.js";
+import type { JobStore } from "./job.service.js";
+
+export function createJobRoutes(store?: JobStore): RouterType {
+  const routes = Router();
+  const controller = createJobController(store);
+  routes.use(requireAuth);
+  routes.post(
+    "/erase",
+    requireRole("OPERATOR", "ADMIN"),
+    validateBody(createEraseJobSchema),
+    asyncHandler(controller.createErase),
+  );
+  routes.post(
+    "/recover",
+    requireRole("OPERATOR", "INVESTIGATOR", "ADMIN"),
+    validateBody(createRecoveryJobSchema),
+    asyncHandler(controller.recover),
+  );
+  routes.post(
+    "/:id/approve",
+    requireRole("ADMIN"),
+    validateParams(jobIdParamsSchema),
+    asyncHandler(controller.approve),
+  );
+  routes.post(
+    "/:id/cancel",
+    validateParams(jobIdParamsSchema),
+    asyncHandler(controller.cancel),
+  );
+  routes.get(
+    "/:id/audit",
+    validateParams(jobIdParamsSchema),
+    asyncHandler(controller.audit),
+  );
+  routes.get(
+    "/:id",
+    validateParams(jobIdParamsSchema),
+    asyncHandler(controller.get),
+  );
+  routes.get("/", asyncHandler(controller.list));
+  return routes;
+}
+
+export const jobRoutes: RouterType = createJobRoutes();

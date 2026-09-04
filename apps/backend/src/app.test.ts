@@ -41,6 +41,7 @@ const baseDevice = {
 };
 const devices = [baseDevice];
 const audits: Array<Record<string, unknown>> = [];
+const jobs: Array<Record<string, unknown>> = [];
 const deviceStore = {
   device: {
     findMany: async () => devices,
@@ -64,9 +65,41 @@ const deviceStore = {
       audits.push(data);
       return data;
     },
+    findFirst: async () => audits.at(-1) ?? null,
+    findMany: async ({ where }: { where: { jobId: string } }) =>
+      audits.filter((audit) => audit.jobId === where.jobId),
   },
 } as never;
 const deviceApp = createApp({ userStore: fakeStore, deviceStore });
+const jobStore = {
+  device: deviceStore.device,
+  auditLog: deviceStore.auditLog,
+  job: {
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      const id = `00000000-0000-4000-8000-${String(jobs.length + 1).padStart(12, "0")}`;
+      const job = { id, createdAt: new Date(), ...data };
+      jobs.push(job);
+      return job;
+    },
+    findUnique: async ({ where }: { where: { id: string } }) =>
+      jobs.find((job) => job.id === where.id) ?? null,
+    findMany: async ({ where }: { where?: { userId: string } }) =>
+      where ? jobs.filter((job) => job.userId === where.userId) : jobs,
+    update: async ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }) => {
+      const job = jobs.find((entry) => entry.id === where.id);
+      if (!job) throw new Error("Job not found");
+      Object.assign(job, data);
+      return job;
+    },
+  },
+} as never;
+const jobApp = createApp({ userStore: fakeStore, deviceStore, jobStore });
 
 async function request(
   targetApp: ReturnType<typeof createApp>,
@@ -368,4 +401,99 @@ test("mounted and system disks cannot proceed", async () => {
   assert.equal(systemResult.body.data.rejectionReason, "SYSTEM_DISK_PROTECTED");
   assert.equal(mountedResult.body.data.typeToConfirm, null);
   assert.equal(systemResult.body.data.typeToConfirm, null);
+});
+
+function authHeader(role: "ADMIN" | "OPERATOR" | "INVESTIGATOR") {
+  return {
+    authorization: `Bearer ${createToken({ sub: fakeUser.id, username: role.toLowerCase(), role })}`,
+    "content-type": "application/json",
+  };
+}
+
+test("erase creation rejects an invalid confirmation", async () => {
+  const response = await request(jobApp, "/api/jobs/erase", {
+    method: "POST",
+    headers: authHeader("OPERATOR"),
+    body: JSON.stringify({
+      deviceId: baseDevice.id,
+      eraseScope: "WHOLE_DRIVE",
+      typeToConfirm: "WRONG",
+    }),
+  });
+  const body = (await response.json()) as { error: { code: string } };
+  assert.equal(response.status, 400);
+  assert.equal(body.error.code, "INVALID_CONFIRMATION");
+});
+
+test("only admins can approve and approved jobs retain approver data", async () => {
+  const createResponse = await request(jobApp, "/api/jobs/erase", {
+    method: "POST",
+    headers: authHeader("OPERATOR"),
+    body: JSON.stringify({
+      deviceId: baseDevice.id,
+      eraseScope: "WHOLE_DRIVE",
+      typeToConfirm: baseDevice.serial,
+    }),
+  });
+  const created = (await createResponse.json()) as { data: { id: string } };
+  const denied = await request(jobApp, `/api/jobs/${created.data.id}/approve`, {
+    method: "POST",
+    headers: authHeader("OPERATOR"),
+  });
+  assert.equal(denied.status, 403);
+  const approved = await request(
+    jobApp,
+    `/api/jobs/${created.data.id}/approve`,
+    { method: "POST", headers: authHeader("ADMIN") },
+  );
+  const approvedBody = (await approved.json()) as {
+    data: { approvalStatus: string; approvedById: string; approvedAt: string };
+  };
+  assert.equal(approved.status, 200);
+  assert.equal(approvedBody.data.approvalStatus, "APPROVED");
+  assert.equal(approvedBody.data.approvedById, fakeUser.id);
+  assert.ok(approvedBody.data.approvedAt);
+});
+
+test("investigators can create recovery jobs but not erase jobs", async () => {
+  const recovery = await request(jobApp, "/api/jobs/recover", {
+    method: "POST",
+    headers: authHeader("INVESTIGATOR"),
+    body: JSON.stringify({ imageId: "00000000-0000-4000-8000-000000000999" }),
+  });
+  assert.equal(recovery.status, 201);
+  const erase = await request(jobApp, "/api/jobs/erase", {
+    method: "POST",
+    headers: authHeader("INVESTIGATOR"),
+    body: JSON.stringify({
+      deviceId: baseDevice.id,
+      eraseScope: "WHOLE_DRIVE",
+      typeToConfirm: baseDevice.serial,
+    }),
+  });
+  assert.equal(erase.status, 403);
+});
+
+test("job audit events contain hash-chain fields", async () => {
+  const job = jobs[0];
+  assert.ok(job?.id);
+  const response = await request(jobApp, `/api/jobs/${job.id}/audit`, {
+    headers: authHeader("ADMIN"),
+  });
+  const body = (await response.json()) as {
+    data: Array<{ eventHash: string; previousHash?: string }>;
+  };
+  assert.equal(response.status, 200);
+  assert.ok(body.data.length > 0);
+  assert.ok(body.data[0]?.eventHash);
+  assert.ok(
+    audits.some(
+      (audit) => audit.action === "ERASE_REQUESTED" && audit.eventHash,
+    ),
+  );
+  assert.ok(
+    audits.some(
+      (audit) => audit.action === "ERASE_APPROVED" && audit.previousHash,
+    ),
+  );
 });
