@@ -5,13 +5,19 @@ export const recoveredFileResultSchema = z.object({
   jobId: z.uuid(),
   fileName: z.string().nullable(),
   fileType: z.string(),
+  mimeType: z.string().nullable().optional(),
   offsetStart: z.string().regex(/^\\d+$/),
   offsetEnd: z.string().regex(/^\\d+$/),
   isFragmented: z.boolean(),
+  isTruncated: z.boolean().optional(),
+  fragmentCount: z.number().int().positive().optional(),
   confidenceScore: z.number().min(0).max(1),
   confidenceLevel: z.enum(["HIGH", "MEDIUM", "LOW"]),
-  validationNotes: z.string().nullable(),
+  scoreBreakdown: z.record(z.string(), z.unknown()).optional(),
+  validationNotes: z.unknown().nullable().optional(),
+  sha256: z.string().nullable().optional(),
   storedPath: z.string(),
+  previewPath: z.string().nullable().optional(),
 });
 
 export type RecoveredFileResult = z.infer<typeof recoveredFileResultSchema>;

@@ -3,7 +3,10 @@ import { Redis } from "ioredis";
 import { env } from "../config/env.js";
 import { simulateJob } from "./simulation.js";
 import { createRedisPublisher } from "../lib/publisher.js";
-import { runEraseWithFallback } from "./python-bridge.js";
+import {
+  runEraseWithFallback,
+  runRecoverWithFallback,
+} from "./python-bridge.js";
 
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const publisher = createRedisPublisher(env.REDIS_URL);
@@ -14,7 +17,7 @@ const eraseWorker = new Worker(
 );
 const recoverWorker = new Worker(
   "forensweep-recover",
-  async (job) => simulateJob(job.data.jobId, "RECOVER", undefined, publisher),
+  async (job) => runRecoverWithFallback(job.data.jobId, publisher),
   { connection },
 );
 

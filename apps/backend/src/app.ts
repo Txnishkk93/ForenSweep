@@ -20,6 +20,10 @@ import type { JobStore } from "./modules/jobs/job.service.js";
 import type { JobQueue } from "./lib/queues.js";
 import type { EventPublisher } from "./lib/publisher.js";
 import {
+  internalRecoveryRoutes,
+  recoveryRoutes,
+} from "./modules/recovery/recovery.routes.js";
+import {
   createInternalRoutes,
   internalRoutes,
 } from "./modules/internal/internal.routes.js";
@@ -103,9 +107,9 @@ export function createApp(
       : internalRoutes,
   );
   app.use("/internal", internalCertificateRoutes);
+  app.use("/internal", internalRecoveryRoutes);
   app.use("/api", certificateRoutes);
-  app.use("/internal", internalCertificateRoutes);
-  app.use("/api", certificateRoutes);
+  app.use("/api", recoveryRoutes);
   app.use("/internal", internalRoutes);
   app.use(notFound);
   app.use(errorHandler);

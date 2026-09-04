@@ -6,6 +6,7 @@ import sys
 from .api_client import WorkerApiClient
 from .config import load_config
 from .jobs.erase_job import run_erase
+from .jobs.recover_job import run_recovery
 
 
 def main() -> int:
@@ -13,12 +14,16 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     erase = commands.add_parser("erase")
     erase.add_argument("--job-id", required=True)
+    recover = commands.add_parser("recover")
+    recover.add_argument("--job-id", required=True)
     args = parser.parse_args()
     config = load_config()
     client = WorkerApiClient(config)
     try:
         if args.command == "erase":
             run_erase(args.job_id, config, client)
+        elif args.command == "recover":
+            run_recovery(args.job_id, config, client)
         return 0
     except Exception as error:
         try:
