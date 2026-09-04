@@ -1,0 +1,24 @@
+# ForenSweep Project Rules
+
+- This repository is a Bun + Turborepo monorepo.
+- Preserve existing workspace conventions and package names.
+- Use TypeScript strict mode.
+- Never replace Bun with npm, pnpm, or yarn.
+- Backend is Node.js + Express + TypeScript.
+- Frontend is React/TypeScript.
+- Prisma/PostgreSQL lives in packages/db.
+- Python owns low-level forensic logic and disk-image processing.
+- Node API must not directly execute dd, shred, hdparm, nvme, blkdiscard, or other raw-device commands.
+- Real device erasure must remain disabled by default.
+- Only safe .img files inside SAFE_IMAGE_ROOT may be handled in simulation mode.
+- Never accept arbitrary filesystem paths from the frontend.
+- Browser sends device IDs or server-generated upload IDs only.
+- Validate HTTP payloads with Zod.
+- Use shared schemas/types from packages/shared.
+- Convert BigInt values to strings in API and WebSocket responses.
+- Use UUIDs for jobs and job-scoped output folders.
+- Do not use child_process.exec with interpolated user input.
+- Keep private keys, .env files, certificates, images, recovered files, and generated PDFs out of Git.
+- Run typecheck/lint/tests after each task where scripts exist.
+- Do not make broad unrelated refactors.
+- At the end of every task, report changed files, commands run, and remaining work.
