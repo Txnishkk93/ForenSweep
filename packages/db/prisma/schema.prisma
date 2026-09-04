@@ -15,6 +15,7 @@ model User {
   createdAt    DateTime   @default(now())
   jobs         Job[]
   auditLogs    AuditLog[]
+  approvedJobs Job[]      @relation("JobApproval")
 }
 
 enum Role {
@@ -32,6 +33,22 @@ enum JobStatus {
   QUEUED
   RUNNING
   VERIFYING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum JobStage {
+  QUEUED
+  DEVICE_PROFILED
+  WAITING_FOR_APPROVAL
+  OVERWRITING
+  SANITIZING
+  CARVING
+  VALIDATING
+  RECONSTRUCTING
+  VERIFYING
+  CERTIFYING
   COMPLETED
   FAILED
 }
@@ -53,6 +70,21 @@ enum EraseMethod {
   FILE_LEVEL_OVERWRITE
 }
 
+enum EraseScope {
+  WHOLE_DRIVE
+  SPECIFIC_FILES
+}
+
+enum ScanType {
+  QUICK
+  DEEP
+}
+
+enum SanitizationStandard {
+  NIST_800_88
+  DOD_5220_22_M
+}
+
 enum ConfidenceLevel {
   HIGH
   MEDIUM
@@ -65,45 +97,68 @@ enum RiskLevel {
   HIGH
 }
 
+enum ApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Device {
-  id           String     @id @default(uuid())
-  path         String
-  type         DeviceType
-  model        String?
-  serial       String?
-  sizeBytes    BigInt?
-  supportsAta  Boolean    @default(false)
-  supportsNvme Boolean    @default(false)
-  supportsSed  Boolean    @default(false)
-  lastSeenAt   DateTime   @default(now())
-  jobs         Job[]
+  id                 String     @id @default(uuid())
+  path               String
+  type               DeviceType
+  model              String?
+  serial             String?
+  sizeBytes          BigInt?
+  supportsAta        Boolean    @default(false)
+  supportsNvme       Boolean    @default(false)
+  supportsSed        Boolean    @default(false)
+  mounted            Boolean    @default(false)
+  isSystemDisk       Boolean    @default(false)
+  capabilitySnapshot Json?
+  lastSeenAt         DateTime   @default(now())
+  jobs               Job[]
 
   @@index([path])
   @@index([serial])
+  @@index([type])
+  @@index([isSystemDisk])
 }
 
 model Job {
-  id                String          @id @default(uuid())
+  id                String                @id @default(uuid())
   type              JobType
-  status            JobStatus       @default(QUEUED)
-  progress          Int             @default(0)
+  status            JobStatus             @default(QUEUED)
+  stage             JobStage              @default(QUEUED)
+  progress          Int                   @default(0)
+  currentPass       Int                   @default(0)
+  totalPasses       Int                   @default(0)
+  progressDetail    Json
   deviceId          String?
   userId            String
+  approvalStatus    ApprovalStatus        @default(NOT_REQUIRED)
+  approvedById      String?
+  approvedAt        DateTime?
   eraseMethod       EraseMethod?
-  eraseScope        String?
-  eraseFileList     String?
-  standard          String?
+  eraseScope        EraseScope?
+  eraseFileList     Json?
+  standard          SanitizationStandard?
   verified          Boolean?
+  verificationData  Json?
   residualRiskScore Float?
   residualRiskLevel RiskLevel?
-  scanType          String?
+  scanType          ScanType?
   sourceImagePath   String?
+  sourceHash        String?
+  outputDirectory   String?
   errorMessage      String?
   startedAt         DateTime?
   finishedAt        DateTime?
-  createdAt         DateTime        @default(now())
-  device            Device?         @relation(fields: [deviceId], references: [id])
-  user              User            @relation(fields: [userId], references: [id])
+  createdAt         DateTime              @default(now())
+  device            Device?               @relation(fields: [deviceId], references: [id])
+  user              User                  @relation(fields: [userId], references: [id])
+  approvedBy        User?                 @relation("JobApproval", fields: [approvedById], references: [id])
   certificate       Certificate?
   recoveredFiles    RecoveredFile[]
   auditLogs         AuditLog[]
@@ -111,21 +166,28 @@ model Job {
   @@index([userId])
   @@index([deviceId])
   @@index([status])
+  @@index([stage])
+  @@index([approvalStatus])
 }
 
 model Certificate {
-  id                 String      @id @default(uuid())
-  jobId              String      @unique
-  method             EraseMethod
-  standard           String
-  verificationResult Boolean
-  deviceSnapshot     String
-  contentHash        String
-  prevCertHash       String?
-  signature          String
-  pdfPath            String
-  createdAt          DateTime    @default(now())
-  job                Job         @relation(fields: [jobId], references: [id])
+  id                  String               @id @default(uuid())
+  certificateNumber   String               @unique
+  jobId               String               @unique
+  method              EraseMethod
+  standard            SanitizationStandard
+  verificationResult  Boolean
+  verificationDetails Json?
+  deviceSnapshot      Json
+  canonicalPayload    Json
+  contentHash         String
+  hashAlgorithm       String
+  signatureAlgorithm  String
+  prevCertHash        String?
+  signature           String
+  pdfPath             String?
+  createdAt           DateTime             @default(now())
+  job                 Job                  @relation(fields: [jobId], references: [id])
 
   @@index([jobId])
 }
@@ -135,13 +197,19 @@ model RecoveredFile {
   jobId           String
   fileName        String?
   fileType        String
+  mimeType        String?
   offsetStart     BigInt
   offsetEnd       BigInt
   isFragmented    Boolean         @default(false)
+  isTruncated     Boolean         @default(false)
+  fragmentCount   Int             @default(1)
   confidenceScore Float
   confidenceLevel ConfidenceLevel
-  validationNotes String?
+  scoreBreakdown  Json?
+  validationNotes Json?
+  sha256          String?
   storedPath      String
+  previewPath     String?
   createdAt       DateTime        @default(now())
   job             Job             @relation(fields: [jobId], references: [id])
 
@@ -149,16 +217,20 @@ model RecoveredFile {
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?
-  jobId     String?
-  action    String
-  detail    String?
-  timestamp DateTime @default(now())
-  user      User?    @relation(fields: [userId], references: [id])
-  job       Job?     @relation(fields: [jobId], references: [id])
+  id           String   @id @default(uuid())
+  userId       String?
+  jobId        String?
+  action       String
+  detail       Json?
+  previousHash String?
+  eventHash    String
+  signature    String?
+  timestamp    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+  job          Job?     @relation(fields: [jobId], references: [id])
 
   @@index([userId])
   @@index([jobId])
   @@index([timestamp])
+  @@index([eventHash])
 }
