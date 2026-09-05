@@ -1,10 +1,15 @@
-import "dotenv/config";
 import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import { Redis } from "ioredis";
 import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 import { prismaClient } from "@repo/db";
 import { jobEventSchema } from "@repo/shared";
+
+dotenv.config({
+  path: fileURLToPath(new URL("../../backend/.env", import.meta.url)),
+});
 
 const port = Number(process.env.WS_PORT ?? 4001);
 const redisUrl = process.env.REDIS_URL;
