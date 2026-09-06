@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { ErrorRequestHandler } from "express";
 import { logError } from "../lib/logger.js";
 import { sendSuccess } from "../lib/serialize.js";
+import multer from "multer";
 
 export class AppError extends Error {
   constructor(
@@ -26,6 +27,15 @@ function isDatabaseConnectivityError(error: unknown): boolean {
 export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   const requestId = req.requestId;
   let appError = error instanceof AppError ? error : undefined;
+  if (error instanceof multer.MulterError) {
+    appError = new AppError(
+      error.code === "LIMIT_FILE_SIZE" ? 413 : 400,
+      error.code === "LIMIT_FILE_SIZE" ? "UPLOAD_TOO_LARGE" : "UPLOAD_INVALID",
+      error.code === "LIMIT_FILE_SIZE"
+        ? "Upload exceeds the 500MB maximum size"
+        : "Invalid multipart upload",
+    );
+  }
   if (isDatabaseConnectivityError(error))
     appError = new AppError(
       503,
