@@ -18,7 +18,7 @@ export const recoveredFileSchema = z.object({
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
   storedPath: z.string().min(1),
-  previewPath: z.string().optional(),
+  previewPath: z.string().nullable().optional(),
   previewAvailable: z.boolean().optional(),
   fragmentationStatus: z.literal("NOT_ATTEMPTED").optional(),
 });

@@ -17,6 +17,13 @@ export async function ingestRecoveredFile(
   input: z.infer<typeof recoveredFileSchema>,
   store: RecoveryStore = prisma,
 ) {
+  console.info(JSON.stringify({
+    message: "recovered_file_received",
+    jobId,
+    fileName: input.fileName,
+    fileType: input.fileType,
+    confidenceLevel: input.confidenceLevel,
+  }));
   const job = await store.job.findUnique({ where: { id: jobId } });
   if (!job || job.type !== "RECOVER")
     throw new AppError(404, "RECOVERY_JOB_NOT_FOUND", "Recovery job not found");
@@ -44,18 +51,43 @@ export async function ingestRecoveredFile(
       "UNSAFE_PREVIEW_PATH",
       "Recovered preview is outside the controlled output root",
     );
+  const {
+    fileName,
+    fileType,
+    mimeType,
+    offsetStart,
+    offsetEnd,
+    isFragmented,
+    isTruncated,
+    fragmentCount,
+    confidenceScore,
+    confidenceLevel,
+    scoreBreakdown,
+    validationNotes,
+    sha256,
+    previewPath: _previewPath,
+    storedPath: _storedPath,
+    previewAvailable: _previewAvailable,
+    fragmentationStatus: _fragmentationStatus,
+  } = input;
   return store.recoveredFile.create({
     data: {
-      ...input,
       jobId,
+      fileName,
+      fileType,
+      mimeType,
+      offsetStart: BigInt(offsetStart),
+      offsetEnd: BigInt(offsetEnd),
+      isFragmented,
+      isTruncated,
+      fragmentCount,
+      confidenceScore,
+      confidenceLevel,
+      scoreBreakdown: scoreBreakdown as Prisma.InputJsonObject | undefined,
+      validationNotes: validationNotes as Prisma.InputJsonValue | undefined,
+      sha256,
       storedPath,
       previewPath,
-      offsetStart: BigInt(input.offsetStart),
-      offsetEnd: BigInt(input.offsetEnd),
-      scoreBreakdown: input.scoreBreakdown as
-        Prisma.InputJsonObject | undefined,
-      validationNotes: input.validationNotes as
-        Prisma.InputJsonValue | undefined,
     },
   });
 }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 import re
 import time
 from pathlib import Path
@@ -12,18 +14,24 @@ from .stream_reader import read_chunks
 from .validators import validate_jpeg, validate_pdf, validate_png, validate_zip
 
 _FILENAME = re.compile(r"[^A-Za-z0-9._-]+")
+_LOGGER = logging.getLogger(__name__)
 
 
 def _safe_name(kind: str, offset: int, extension: str) -> str:
     return _FILENAME.sub("_", f"recovered_{kind.lower()}_{offset}{extension}")
 
 
-def scan_and_carve(source: Path, output_dir: Path, *, chunk_size: int, max_candidates: int, max_duration_seconds: int, max_extraction_size: int) -> list[dict[str, Any]]:
+def scan_and_carve(source: Path, output_dir: Path, *, chunk_size: int, max_candidates: int, max_duration_seconds: int, max_extraction_size: int, scan_type: str = "DEEP") -> list[dict[str, Any]]:
+    if scan_type not in {"QUICK", "DEEP"}:
+        raise ValueError(f"Unsupported recovery scan type: {scan_type}")
     output_dir.mkdir(parents=True, exist_ok=True)
     candidates: list[dict[str, Any]] = []
     seen: set[tuple[str, int]] = set()
     started = time.monotonic()
+    bytes_read = 0
+    raw_signature_matches = 0
     for chunk in read_chunks(source, chunk_size, overlap=64):
+        bytes_read += chunk.bytes_read
         if time.monotonic() - started > max_duration_seconds or len(candidates) >= max_candidates:
             break
         for signature in SUPPORTED:
@@ -31,6 +39,7 @@ def scan_and_carve(source: Path, output_dir: Path, *, chunk_size: int, max_candi
             while len(candidates) < max_candidates:
                 found = chunk.data.find(signature.header, cursor)
                 if found < 0: break
+                raw_signature_matches += 1
                 absolute = chunk.offset + found
                 key = (signature.kind, absolute)
                 cursor = found + 1
@@ -38,6 +47,15 @@ def scan_and_carve(source: Path, output_dir: Path, *, chunk_size: int, max_candi
                 seen.add(key)
                 candidate = _extract(source, signature, absolute, output_dir, max_duration_seconds - (time.monotonic() - started), min(signature.max_size, max_extraction_size))
                 if candidate is not None: candidates.append(candidate)
+    _LOGGER.info(json.dumps({
+        "event": "recovery_carve_complete",
+        "source": str(source),
+        "scanType": scan_type,
+        "expectedBytes": source.stat().st_size,
+        "bytesRead": bytes_read,
+        "rawSignatureMatches": raw_signature_matches,
+        "validatedCandidates": len(candidates),
+    }))
     return candidates
 
 

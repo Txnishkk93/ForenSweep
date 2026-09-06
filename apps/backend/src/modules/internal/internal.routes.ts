@@ -98,6 +98,7 @@ export function createInternalRoutes(
             approvedById: job.approvedById,
             startedAt: job.startedAt?.toISOString() ?? null,
             totalPasses: job.totalPasses,
+            scanType: job.scanType,
             sourceImagePath: job.sourceImagePath,
           },
           device: serialize(
