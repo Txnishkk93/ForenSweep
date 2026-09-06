@@ -24,7 +24,14 @@ class WorkerApiClient:
             with urllib.request.urlopen(request, timeout=30) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
-            raise RuntimeError(f"worker API request failed: HTTP {error.code}") from error
+            try:
+                detail = error.read().decode("utf-8")
+            except (OSError, UnicodeDecodeError):
+                detail = ""
+            message = f"worker API request failed: HTTP {error.code}"
+            if detail:
+                message = f"{message}: {detail}"
+            raise RuntimeError(message) from error
         except urllib.error.URLError as error:
             raise RuntimeError("worker API is unreachable") from error
 

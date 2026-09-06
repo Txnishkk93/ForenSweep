@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { Button } from "@/components/Button";
-import { getCertificate, verifyCertificate } from "@/lib/backend-api";
+import { downloadCertificate, getCertificate, verifyCertificate } from "@/lib/backend-api";
 import type { Certificate } from "@/lib/types";
 
 export default function CertificateDetailPage({
@@ -13,6 +13,7 @@ export default function CertificateDetailPage({
 }) {
   const [cert, setCert] = useState<Certificate | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading">("idle");
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "valid" | "invalid">(
     "idle",
   );
@@ -42,6 +43,31 @@ export default function CertificateDetailPage({
           : "Unable to verify certificate.",
       );
       setVerifyState("invalid");
+    }
+  }
+
+  async function handleDownload() {
+    if (!cert) return;
+    setDownloadState("downloading");
+    setError(null);
+    try {
+      const blob = await downloadCertificate(cert.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `forensweep-certificate-${cert.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to download certificate.",
+      );
+    } finally {
+      setDownloadState("idle");
     }
   }
 
@@ -88,9 +114,9 @@ export default function CertificateDetailPage({
         <Button onClick={handleVerify} disabled={verifyState === "checking"}>
           {verifyState === "checking" ? "Verifying..." : "Verify certificate"}
         </Button>
-        <a href={cert.pdfPath} target="_blank" rel="noreferrer">
-          <Button variant="secondary">Download PDF</Button>
-        </a>
+        <Button variant="secondary" onClick={handleDownload} disabled={downloadState === "downloading"}>
+          {downloadState === "downloading" ? "Downloading..." : "Download PDF"}
+        </Button>
       </div>
 
       {verifyState === "valid" && (

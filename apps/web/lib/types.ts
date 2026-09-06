@@ -4,7 +4,7 @@
 
 export type Role = "ADMIN" | "OPERATOR" | "INVESTIGATOR";
 export type JobType = "ERASE" | "RECOVER";
-export type JobStatus = "QUEUED" | "RUNNING" | "VERIFYING" | "COMPLETED" | "FAILED";
+export type JobStatus = "QUEUED" | "RUNNING" | "VERIFYING" | "COMPLETED" | "FAILED" | "CANCELLED";
 export type DeviceType = "HDD" | "SSD" | "USB" | "SD_CARD" | "UNKNOWN";
 export type EraseMethod =
   | "OVERWRITE_SINGLE"

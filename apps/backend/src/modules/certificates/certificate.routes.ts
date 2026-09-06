@@ -1,4 +1,6 @@
 import { Router, type Router as RouterType } from "express";
+import { stat } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
@@ -6,6 +8,7 @@ import { requireWorkerToken } from "../../middleware/worker-auth.js";
 import { validateBody, validateParams } from "../../middleware/validate.js";
 import { sendSuccess } from "../../lib/serialize.js";
 import { prisma } from "../../lib/prisma.js";
+import { appendAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 import {
   getCertificateForUser,
@@ -67,6 +70,49 @@ certificateRoutes.get(
       { requestId: req.requestId },
     ),
   ),
+);
+certificateRoutes.get(
+  "/certificates/:id/download",
+  validateParams(idSchema),
+  asyncHandler(async (req, res) => {
+    const certificate = await getCertificateForUser(
+      String(req.params.id),
+      req.auth!.userId,
+      req.auth!.role === "ADMIN",
+    );
+    if (!certificate.pdfPath)
+      throw new AppError(
+        404,
+        "CERTIFICATE_PDF_NOT_FOUND",
+        "Certificate PDF file not found on server",
+      );
+
+    const filePath = path.resolve(certificate.pdfPath);
+    try {
+      await stat(filePath);
+    } catch {
+      throw new AppError(
+        404,
+        "CERTIFICATE_PDF_NOT_FOUND",
+        "Certificate PDF file not found on server",
+      );
+    }
+
+    await appendAuditEvent(prisma, {
+      userId: req.auth!.userId,
+      jobId: certificate.jobId,
+      action: "CERTIFICATE_DOWNLOADED",
+      detail: { certificateId: certificate.id },
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="forensweep-certificate-${certificate.id}.pdf"`,
+    );
+    await new Promise<void>((resolve, reject) =>
+      res.sendFile(filePath, (error) => (error ? reject(error) : resolve())),
+    );
+  }),
 );
 certificateRoutes.post(
   "/certificates/verify",

@@ -1,8 +1,8 @@
 import { Queue } from "bullmq";
-import { Redis } from "ioredis";
 import { env } from "../config/env.js";
+import { createRedisConnection } from "./redis.js";
 
-const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const connection = createRedisConnection(env.REDIS_URL);
 
 export const eraseQueue = new Queue("forensweep-erase", { connection });
 export const recoverQueue = new Queue("forensweep-recover", { connection });

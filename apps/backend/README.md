@@ -27,7 +27,7 @@ bun install
 docker compose up -d postgres redis
 Copy-Item apps/backend/.env.example apps/backend/.env
 Copy-Item apps/forensic-worker/.env.example apps/forensic-worker/.env
-$env:DATABASE_URL = "postgresql://forensweep:forensweep-dev-only@localhost:5432/forensweep"
+$env:DATABASE_URL = "postgresql://forensweep:forensweep-dev-only@localhost:55432/forensweep"
 $env:JWT_SECRET = "forensweep-demo-jwt-secret-32-characters-minimum"
 $env:INTERNAL_WORKER_TOKEN = "forensweep-demo-worker-token-32-characters-min"
 bun run --cwd packages/db db:generate
@@ -35,7 +35,7 @@ bun run --cwd packages/db db:migrate
 bun run --cwd packages/db db:seed
 ```
 
-Set `DATABASE_URL` in `apps/backend/.env` to `postgresql://forensweep:forensweep-dev-only@localhost:5432/forensweep`. Use the same `INTERNAL_WORKER_TOKEN` and `SAFE_IMAGE_ROOT` values in both env files. Generate local certificate keys; never commit them:
+Set `DATABASE_URL` in `apps/backend/.env` to `postgresql://forensweep:forensweep-dev-only@localhost:55432/forensweep`. Use the same `INTERNAL_WORKER_TOKEN` and `SAFE_IMAGE_ROOT` values in both env files. Generate local certificate keys; never commit them:
 
 ```powershell
 cd apps/forensic-worker

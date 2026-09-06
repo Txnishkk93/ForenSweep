@@ -1,4 +1,4 @@
-import { apiFetch } from "./api-client";
+import { apiFetch, apiFetchBlob } from "./api-client";
 import type {
   AuditEvent,
   AvailableImage,
@@ -120,6 +120,10 @@ export async function getCertificateForJob(jobId: string): Promise<Certificate> 
 
 export async function getCertificate(certificateId: string): Promise<Certificate> {
   return apiFetch<Certificate>(`/api/certificates/${certificateId}`);
+}
+
+export async function downloadCertificate(certificateId: string): Promise<Blob> {
+  return apiFetchBlob(`/api/certificates/${certificateId}/download`);
 }
 
 export async function verifyCertificate(certificate: Certificate): Promise<{ valid: boolean }> {
