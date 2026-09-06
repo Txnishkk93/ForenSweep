@@ -134,6 +134,7 @@ Connect Socket.IO with `auth.token`, emit `job:subscribe` with the job ID, and c
 ## Troubleshooting
 
 - **Backend rejects env:** copy `.env.example`, use 32+ character JWT and worker secrets, and keep `REAL_DEVICE_OPERATIONS=false`.
+- **Windows device discovery:** PowerShell disk discovery runs with `-NoProfile -NonInteractive -ExecutionPolicy Bypass` and does not require Administrator privileges on the supported demo path. If Windows returns no devices or discovery times out, the API returns an empty device list and logs the PowerShell stderr/detail; use Rescan after checking the backend log. Some enterprise policies or protected system-disk configurations may still require running the backend elevated.
 - **Queue does not progress:** confirm Redis is running and the separate backend worker terminal is active.
 - **Worker cannot reach API:** verify `BACKEND_INTERNAL_URL` and matching `INTERNAL_WORKER_TOKEN`.
 - **Certificate signing fails:** run `python scripts/generate_dev_key.py`, set `CERT_PRIVATE_KEY_PATH` for Python and the matching `CERT_PUBLIC_KEY_PATH` for backend.

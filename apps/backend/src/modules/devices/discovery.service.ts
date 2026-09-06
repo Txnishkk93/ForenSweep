@@ -283,8 +283,15 @@ export function normalizeWindowsDevices(
 }
 
 async function powershellJson(command: string): Promise<unknown> {
-  const result = await safeReadCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command], 10000);
-  if (result.code !== 0) throw new Error("PowerShell discovery command failed");
+  const result = await safeReadCommand(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
+    10000,
+  );
+  if (result.code !== 0) {
+    const detail = result.stderr.trim() ? `: ${result.stderr.trim()}` : "";
+    throw new Error(`PowerShell discovery command failed${detail}`);
+  }
   return JSON.parse(result.stdout || "null") as unknown;
 }
 
@@ -295,7 +302,11 @@ export async function scanWindows(): Promise<Discovery[]> {
     const partitions = await powershellJson("Get-Partition | Select-Object DriveLetter,DiskNumber | ConvertTo-Json -Compress");
     return normalizeWindowsDevices(physical, disks, partitions);
   } catch (error) {
-    throw new AppError(503, "DEVICE_DISCOVERY_UNAVAILABLE", `Windows PowerShell discovery unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+    console.warn(JSON.stringify({
+      message: "windows_device_discovery_unavailable",
+      detail: error instanceof Error ? error.message : "unknown error",
+    }));
+    return [];
   }
 }
 
