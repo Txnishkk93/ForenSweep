@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { createRecoveryJob, getDevices } from "@/lib/backend-api";
-import type { Device } from "@/lib/types";
+import { createRecoveryJob, getAvailableImages, getDevices } from "@/lib/backend-api";
+import { formatBytes } from "@/lib/status-colors";
+import type { AvailableImage, Device } from "@/lib/types";
 
 export default function NewRecoveryPage() {
   const router = useRouter();
@@ -15,27 +16,32 @@ export default function NewRecoveryPage() {
   const [scanType, setScanType] = useState<"quick" | "deep">("quick");
   const [submitting, setSubmitting] = useState(false);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [images, setImages] = useState<AvailableImage[]>([]);
+  const [loadingSources, setLoadingSources] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
 
   useEffect(() => {
-    getDevices()
-      .then(setDevices)
+    Promise.all([getDevices(), getAvailableImages()])
+      .then(([loadedDevices, loadedImages]) => {
+        setDevices(loadedDevices);
+        setImages(loadedImages);
+      })
       .catch((requestError) =>
         setError(requestError instanceof Error ? requestError.message : "Unable to load acquisitions."),
-      );
+      )
+      .finally(() => setLoadingSources(false));
   }, []);
 
   async function handleSubmit() {
     setSubmitting(true);
-    setSubmitting(true);
     setError(null);
     try {
-      if (!acquisition) throw new Error("Select an acquisition first.");
+      if (!acquisitionId) throw new Error("Select an acquisition first.");
       const job = await createRecoveryJob({
-        deviceId: acquisition.id,
+        ...(acquisition ? { deviceId: acquisition.id } : { imageId: acquisitionId }),
         scanType: scanType.toUpperCase() as "QUICK" | "DEEP",
       });
       router.push(`/recover/${job.id}`);
@@ -59,9 +65,15 @@ export default function NewRecoveryPage() {
           has been verified — never against a live device directly.
         </p>
         <div className="flex flex-col gap-2">
+          {loadingSources && <p className="text-sm text-body-muted">Loading acquisitions...</p>}
+          {!loadingSources && !devices.length && !images.length && !error && (
+            <p className="text-sm text-body-muted">No verified acquisitions or storage devices detected.</p>
+          )}
           {devices.map((a) => (
             <button
               key={a.id}
+              type="button"
+              disabled={Boolean(a.mounted || a.isSystemDisk)}
               onClick={() => setAcquisitionId(a.id)}
               className={
                 "flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " +
@@ -72,12 +84,28 @@ export default function NewRecoveryPage() {
             >
               <div>
                 <MonoText>{a.path}</MonoText>
-                <p className="mt-1 text-[12px] text-body-muted">{a.id}</p>
+                <p className="mt-1 text-[12px] text-body-muted">{a.model ?? a.type}</p>
               </div>
-              <StatusBadge
-                label="Hash verified"
-                tone="success"
-              />
+              <StatusBadge label={a.mounted || a.isSystemDisk ? "Unavailable" : "Device"} tone={a.mounted || a.isSystemDisk ? "warning" : "success"} />
+            </button>
+          ))}
+          {images.map((image) => (
+            <button
+              key={image.id}
+              type="button"
+              onClick={() => setAcquisitionId(image.id)}
+              className={
+                "flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " +
+                (acquisitionId === image.id
+                  ? "border-recovery bg-recovery-soft"
+                  : "border-hairline-strong hover:bg-canvas-soft")
+              }
+            >
+              <div>
+                <p className="text-[14px] font-medium text-ink">{image.filename}</p>
+                <p className="mt-1 text-[12px] text-body-muted">{formatBytes(image.sizeBytes)}</p>
+              </div>
+              <StatusBadge label="Image" tone="success" />
             </button>
           ))}
         </div>

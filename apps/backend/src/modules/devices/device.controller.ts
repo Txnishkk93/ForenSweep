@@ -5,7 +5,7 @@ import {
   getDeviceProfile,
   listDevices,
   previewErase,
-  refreshMockDevices,
+  refreshDevices,
   type DeviceStore,
 } from "./device.service.js";
 
@@ -27,7 +27,7 @@ export function createDeviceController(store?: DeviceStore) {
         { requestId: req.requestId },
       )) as RequestHandler,
     refresh: (async (req, res) =>
-      sendSuccess(res, await refreshMockDevices(req.auth!.userId, store), 200, {
+      sendSuccess(res, await refreshDevices(req.auth!.userId, store), 200, {
         requestId: req.requestId,
       })) as RequestHandler,
     preview: (async (req, res) =>

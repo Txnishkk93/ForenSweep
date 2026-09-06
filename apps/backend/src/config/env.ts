@@ -29,6 +29,13 @@ const rawEnvSchema = z.object({
     .string()
     .min(1)
     .default("./secrets/forensweep-ed25519-public.pem"),
+  HARDWARE_DEMO_ENABLED: booleanFromString.default(false),
+  HARDWARE_DEMO_ALLOWED_METHOD: z
+    .literal("OVERWRITE_SINGLE")
+    .default("OVERWRITE_SINGLE"),
+  HARDWARE_DEMO_MAX_CAPACITY_BYTES: z.coerce.bigint().positive().optional(),
+  HARDWARE_DEMO_CONFIRM_PHRASE: z.string().min(1).optional(),
+  PROTECTED_DEVICES_PATH: z.string().min(1).default("./protected-devices.json"),
 });
 
 const parsed = rawEnvSchema.safeParse(process.env);
@@ -50,6 +57,18 @@ if (parsed.data.NODE_ENV !== "test") {
 
 export type AppEnv = z.infer<typeof rawEnvSchema>;
 export const env: Readonly<AppEnv> = Object.freeze(parsed.data);
+
+export const hardwareDemoGate =
+  env.REAL_DEVICE_OPERATIONS &&
+  env.HARDWARE_DEMO_ENABLED &&
+  env.HARDWARE_DEMO_ALLOWED_METHOD === "OVERWRITE_SINGLE" &&
+  env.HARDWARE_DEMO_MAX_CAPACITY_BYTES !== undefined &&
+  env.HARDWARE_DEMO_CONFIRM_PHRASE !== undefined
+    ? Object.freeze({
+        maxCapacityBytes: env.HARDWARE_DEMO_MAX_CAPACITY_BYTES,
+        confirmPhrase: env.HARDWARE_DEMO_CONFIRM_PHRASE,
+      })
+    : null;
 
 if (env.REAL_DEVICE_OPERATIONS) {
   logInfo(

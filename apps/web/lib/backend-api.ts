@@ -1,6 +1,7 @@
 import { apiFetch } from "./api-client";
 import type {
   AuditEvent,
+  AvailableImage,
   Certificate,
   Device,
   EraseMethod,
@@ -32,6 +33,14 @@ type RawAuditEvent = {
 
 export async function getDevices(): Promise<Device[]> {
   return apiFetch<Device[]>("/api/devices");
+}
+
+export async function refreshDevices(): Promise<void> {
+  await apiFetch("/api/devices/refresh", { method: "POST" });
+}
+
+export async function getAvailableImages(): Promise<AvailableImage[]> {
+  return apiFetch<AvailableImage[]>("/api/acquisitions/available-images");
 }
 
 export async function getDevice(deviceId: string): Promise<Device> {

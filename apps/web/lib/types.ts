@@ -32,6 +32,13 @@ export interface Device {
   supportsSed: boolean;
 }
 
+export interface AvailableImage {
+  id: string;
+  filename: string;
+  sizeBytes: string;
+  createdAt: string;
+}
+
 export interface SanitizationPlan {
   method: EraseMethod;
   nistCategory: NistCategory;

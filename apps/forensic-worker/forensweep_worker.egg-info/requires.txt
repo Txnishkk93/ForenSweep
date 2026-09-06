@@ -1,0 +1,4 @@
+cryptography>=42
+pillow>=10
+pypdf>=5
+reportlab>=4

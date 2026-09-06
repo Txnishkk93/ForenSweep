@@ -93,6 +93,7 @@ export function createInternalRoutes(
             eraseMethod: job.eraseMethod,
             eraseScope: job.eraseScope,
             standard: job.standard,
+            progressDetail: serialize(job.progressDetail),
             userId: job.userId,
             approvedById: job.approvedById,
             startedAt: job.startedAt?.toISOString() ?? null,
@@ -209,11 +210,15 @@ export function createInternalRoutes(
     validateBody(internalFailSchema),
     asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof internalFailSchema>;
+      const existing = await prisma.job.findUnique({
+        where: { id: String(req.params.jobId) },
+        select: { status: true },
+      });
       const updated = await prisma.job.update({
         where: { id: String(req.params.jobId) },
         data: {
-          status: "FAILED",
-          stage: "FAILED",
+          status: existing?.status === "CANCELLED" ? "CANCELLED" : "FAILED",
+          stage: existing?.status === "CANCELLED" ? "FAILED" : "FAILED",
           errorMessage: body.message,
           finishedAt: new Date(),
         },

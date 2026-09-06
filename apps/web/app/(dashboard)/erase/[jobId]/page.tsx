@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DataCard, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
+import { getUser } from "@/lib/auth";
 import { jobStatusLabel, jobStatusTone, riskTone } from "@/lib/status-colors";
 import { approveJob, getJob } from "@/lib/backend-api";
 import type { JobStatus, RiskLevel } from "@/lib/types";
@@ -55,6 +56,11 @@ export default function EraseJobDetailPage({
   const { status, progress, currentPass, approved, setApproved, verified, riskLevel, certificateId, error } =
     useLiveJob(params.jobId);
   const [approving, setApproving] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(getUser()?.role === "ADMIN");
+  }, []);
 
   async function handleApprove() {
     setApproving(true);
@@ -86,14 +92,20 @@ export default function EraseJobDetailPage({
           <p className="mt-1 text-[13px] text-warning">
             Whole-drive erasure requires a second approver before it can run.
           </p>
-          <Button
-            variant="secondary"
-            className="mt-3"
-            onClick={handleApprove}
-            disabled={approving}
-          >
-            {approving ? "Approving..." : "Approve as admin"}
-          </Button>
+          {isAdmin ? (
+            <Button
+              variant="secondary"
+              className="mt-3"
+              onClick={handleApprove}
+              disabled={approving}
+            >
+              {approving ? "Approving..." : "Approve as admin"}
+            </Button>
+          ) : (
+            <p className="mt-3 text-[13px] font-medium text-warning">
+              An administrator must approve this job.
+            </p>
+          )}
         </DataCard>
       )}
 

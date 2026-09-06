@@ -7,6 +7,7 @@ import {
   createEraseJobSchema,
   createRecoveryJobSchema,
   jobIdParamsSchema,
+  approveJobSchema,
 } from "./job.schemas.js";
 import type { JobStore } from "./job.service.js";
 import type { JobQueue } from "../../lib/queues.js";
@@ -34,6 +35,7 @@ export function createJobRoutes(
     "/:id/approve",
     requireRole("ADMIN"),
     validateParams(jobIdParamsSchema),
+    validateBody(approveJobSchema),
     asyncHandler(controller.approve),
   );
   routes.post(

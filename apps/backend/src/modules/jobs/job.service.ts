@@ -9,6 +9,10 @@ import { appendAuditEvent, type AuditStore } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { DeviceRecord } from "../devices/device.service.js";
 import type { JobQueue } from "../../lib/queues.js";
+import { env, hardwareDemoGate } from "../../config/env.js";
+import fs from "node:fs";
+import bcrypt from "bcryptjs";
+import { resolveAvailableImage } from "../acquisitions/acquisition.service.js";
 
 export type JobStore = Pick<typeof prisma, "device" | "job" | "auditLog">;
 
@@ -65,6 +69,38 @@ function confirmationValues(device: DeviceRecord): string[] {
   );
 }
 
+function protectedDevice(device: DeviceRecord): boolean {
+  try {
+    const raw = fs.readFileSync(env.PROTECTED_DEVICES_PATH, "utf8");
+    const entries = JSON.parse(raw) as Array<{ serial?: string; model?: string }>;
+    return entries.some(
+      (entry) =>
+        (entry.serial && entry.serial === device.serial) ||
+        (entry.model && entry.model === device.model),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertHardwareEligibility(device: DeviceRecord, input: CreateEraseJobInput): void {
+  if (!hardwareDemoGate) throw new AppError(409, "HARDWARE_MODE_DISABLED", "Real hardware mode is disabled");
+  if (input.requestedMethod !== "OVERWRITE_SINGLE") throw new AppError(409, "HARDWARE_METHOD_NOT_ALLOWED", "Only OVERWRITE_SINGLE is allowed for hardware mode");
+  if (input.eraseScope !== "WHOLE_DRIVE") throw new AppError(409, "HARDWARE_SCOPE_NOT_ALLOWED", "Hardware mode only supports whole-device scope");
+  const evidence = (device.capabilitySnapshot ?? {}) as Record<string, unknown>;
+  const transport = typeof evidence.transport === "string" ? evidence.transport : "unknown";
+  if (evidence.removable !== true) throw new AppError(409, "HARDWARE_NOT_REMOVABLE", "Device is not removable");
+  if (transport !== "usb") throw new AppError(409, "HARDWARE_NOT_USB", "Device is not USB transport");
+  if (evidence.ssd === true || evidence.ssdIdentity === true) throw new AppError(409, "HARDWARE_SSD_REJECTED", "SSD/NVMe devices are not allowed");
+  if (device.mounted) throw new AppError(409, "HARDWARE_MOUNTED", "Device is mounted");
+  if (device.isSystemDisk) throw new AppError(409, "HARDWARE_SYSTEM_DISK", "System disks are not allowed");
+  if (device.sizeBytes === null || device.sizeBytes > hardwareDemoGate.maxCapacityBytes) throw new AppError(409, "HARDWARE_CAPACITY_EXCEEDED", "Device exceeds the hardware demo capacity limit");
+  if (protectedDevice(device)) throw new AppError(409, "HARDWARE_PROTECTED_DEVICE", "Device matches the protected device denylist");
+  if (input.operatorSerial !== device.serial) throw new AppError(400, "HARDWARE_SERIAL_MISMATCH", "Operator serial does not match the device");
+  if (input.physicalIsolationAttested !== true) throw new AppError(400, "HARDWARE_ISOLATION_REQUIRED", "Physical isolation attestation is required");
+  if (input.hardwareConfirmationPhrase !== hardwareDemoGate.confirmPhrase) throw new AppError(400, "HARDWARE_CONFIRMATION_INVALID", "Hardware confirmation phrase is invalid");
+}
+
 export async function createEraseJob(
   input: CreateEraseJobInput,
   userId: string,
@@ -72,6 +108,8 @@ export async function createEraseJob(
   queue?: JobQueue,
 ) {
   const device = await loadDevice(input.deviceId, store);
+  const hardwareJob = input.requestedMethod === "OVERWRITE_SINGLE" && hardwareDemoGate !== null;
+  if (hardwareJob) assertHardwareEligibility(device, input);
   assertSafeDevice(device);
   const policy = evaluateDevicePolicy({
     device: getDeviceProfile(device),
@@ -106,6 +144,25 @@ export async function createEraseJob(
       progressDetail: {
         requestedMethod: input.requestedMethod ?? null,
         recommendedMethod: policy.recommendedMethod,
+        ...(hardwareJob
+          ? {
+              hardware: true,
+              operatorSerial: input.operatorSerial,
+              physicalIsolationAttested: true,
+              capturedDevice: {
+                path: device.path,
+                serial: device.serial,
+                model: device.model,
+                sizeBytes: device.sizeBytes?.toString() ?? null,
+                mounted: device.mounted,
+                isSystemDisk: device.isSystemDisk,
+                removable: (device.capabilitySnapshot as Record<string, unknown> | null)?.removable ?? false,
+                transport: (device.capabilitySnapshot as Record<string, unknown> | null)?.transport ?? "unknown",
+                rotational: (device.capabilitySnapshot as Record<string, unknown> | null)?.rotational ?? null,
+                capabilitySnapshot: device.capabilitySnapshot,
+              } as Prisma.InputJsonObject,
+            }
+          : {}),
       },
       deviceId: device.id,
       userId,
@@ -135,6 +192,7 @@ export async function approveEraseJob(
   approverId: string,
   store: JobStore = prisma,
   queue?: JobQueue,
+  approvalPassword?: string,
 ) {
   const job = await store.job.findUnique({ where: { id } });
   if (!job) throw new AppError(404, "JOB_NOT_FOUND", "Job not found");
@@ -144,6 +202,19 @@ export async function approveEraseJob(
       "JOB_NOT_PENDING",
       "Only pending erase jobs can be approved",
     );
+  const progressDetail = (job.progressDetail ?? {}) as Record<string, unknown>;
+  if (progressDetail.hardware === true) {
+    if (job.userId === approverId)
+      throw new AppError(403, "HARDWARE_APPROVER_MUST_DIFFER", "A second user must approve hardware erasure");
+    const createdAt = job.createdAt.getTime();
+    if (Date.now() - createdAt < 10_000)
+      throw new AppError(409, "HARDWARE_APPROVAL_TOO_SOON", "Hardware approval requires a 10 second review delay");
+    if (!approvalPassword)
+      throw new AppError(400, "HARDWARE_REAUTH_REQUIRED", "Re-enter the admin password to approve hardware erasure");
+    const approver = await prisma.user.findUnique({ where: { id: approverId } });
+    if (!approver || !(await bcrypt.compare(approvalPassword, approver.passwordHash)))
+      throw new AppError(401, "HARDWARE_REAUTH_INVALID", "Admin password re-authentication failed");
+  }
   const approvedAt = new Date();
   const updated = await store.job.update({
     where: { id },
@@ -173,9 +244,14 @@ export async function cancelJob(
       "FORBIDDEN",
       "You do not have permission to cancel this job",
     );
+  const hardwareRunning =
+    job.type === "ERASE" &&
+    job.status === "RUNNING" &&
+    (job.progressDetail as Record<string, unknown> | null)?.hardware === true;
   if (
-    job.status !== "QUEUED" ||
+    (!hardwareRunning && job.status !== "QUEUED") ||
     (job.type === "ERASE" &&
+      !hardwareRunning &&
       !["PENDING", "NOT_REQUIRED"].includes(job.approvalStatus))
   )
     throw new AppError(
@@ -185,7 +261,7 @@ export async function cancelJob(
     );
   const updated = await store.job.update({
     where: { id },
-    data: { status: "CANCELLED" },
+    data: { status: "CANCELLED", errorMessage: hardwareRunning ? "Cancelled by operator" : undefined },
   });
   await appendAuditEvent(store, {
     userId,
@@ -219,7 +295,9 @@ export async function createRecoveryJob(
       userId,
       scanType: input.scanType,
       sourceImagePath: input.imageId
-        ? `managed-image:${input.imageId}`
+        ? store === prisma
+          ? await resolveAvailableImage(input.imageId)
+          : `managed-image:${input.imageId}`
         : undefined,
     },
   });

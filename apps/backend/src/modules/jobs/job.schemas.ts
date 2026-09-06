@@ -10,6 +10,9 @@ export const createEraseJobSchema = z
     requestedMethod: eraseMethodSchema.optional(),
     standard: z.enum(["NIST_800_88", "DOD_5220_22_M"]).optional(),
     typeToConfirm: z.string().trim().min(1).max(128),
+    operatorSerial: z.string().trim().min(1).max(256).optional(),
+    physicalIsolationAttested: z.boolean().optional(),
+    hardwareConfirmationPhrase: z.string().min(1).max(256).optional(),
     eraseFileList: z.array(z.string().min(1)).max(1000).optional(),
   })
   .strict()
@@ -36,6 +39,10 @@ export const createRecoveryJobSchema = z
 export const jobListQuerySchema = z.object({
   mine: z.enum(["true", "false"]).optional(),
 });
+
+export const approveJobSchema = z.object({
+  approvalPassword: z.string().min(8).max(128).optional(),
+}).strict();
 
 export type CreateEraseJobInput = z.infer<typeof createEraseJobSchema>;
 export type CreateRecoveryJobInput = z.infer<typeof createRecoveryJobSchema>;

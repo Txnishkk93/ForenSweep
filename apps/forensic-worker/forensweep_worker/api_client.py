@@ -31,6 +31,9 @@ class WorkerApiClient:
     def context(self, job_id: str) -> dict[str, Any]:
         return self._request("GET", f"/internal/jobs/{job_id}/worker-context")
 
+    def cancelled(self, job_id: str) -> bool:
+        return self.context(job_id).get("data", {}).get("job", {}).get("status") == "CANCELLED"
+
     def progress(self, job_id: str, payload: dict[str, Any]) -> None:
         self._request("POST", f"/internal/jobs/{job_id}/progress", payload)
 

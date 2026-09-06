@@ -23,6 +23,7 @@ class DeviceProfile:
     serial: str | None
     size: str | None
     mounted: bool
+    removable: bool
     system_disk: bool
     rotational: bool | None
     transport: str
@@ -177,12 +178,18 @@ def _profile(node: dict[str, Any]) -> DeviceProfile | None:
         "udevOpal": udev.get("ID_ATA_OPAL") == "1",
         "smartctlExplicitSed": smart.get("sed") is True,
     }
+    ssd_identity = (
+        transport in {"sata", "nvme"}
+        or udev.get("ID_NVME") == "1"
+        or any(marker in str(node.get("model") or "").upper() for marker in ("SSD", "NVME"))
+    )
     return DeviceProfile(
         path=path,
         model=str(node.get("model") or "").strip() or None,
         serial=str(node.get("serial") or "").strip() or None,
         size=str(node.get("size")) if node.get("size") is not None else None,
         mounted=bool(mountpoints),
+        removable=bool(node.get("rm") is True or node.get("rm") == 1),
         system_disk="/" in mountpoints,
         rotational=rotational,
         transport=transport or "unknown",
@@ -194,6 +201,11 @@ def _profile(node: dict[str, Any]) -> DeviceProfile | None:
             "smartctl": smart,
             "nvme": nvme,
             "mountpoints": mountpoints,
+            "transport": transport or "unknown",
+            "removable": bool(node.get("rm") is True or node.get("rm") == 1),
+            "rotational": rotational,
+            "ssd": transport in {"sata", "nvme"} or rotational is False,
+            "ssdIdentity": ssd_identity,
             "probesAreReadOnly": True,
         },
     )
