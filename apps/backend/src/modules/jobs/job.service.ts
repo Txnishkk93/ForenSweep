@@ -133,11 +133,12 @@ export async function createEraseJob(
       "Type-to-confirm value is invalid",
     );
   }
+  const requiresApproval = hardwareJob || input.eraseScope === "SPECIFIC_FILES";
   const job = await store.job.create({
     data: {
       type: "ERASE",
       status: "QUEUED",
-      stage: "WAITING_FOR_APPROVAL",
+      stage: requiresApproval ? "WAITING_FOR_APPROVAL" : "QUEUED",
       progress: 0,
       currentPass: 0,
       totalPasses: policy.recommendedMethod === "OVERWRITE_MULTI" ? 3 : 1,
@@ -166,7 +167,7 @@ export async function createEraseJob(
       },
       deviceId: device.id,
       userId,
-      approvalStatus: "PENDING",
+      approvalStatus: requiresApproval ? "PENDING" : "NOT_REQUIRED",
       eraseMethod: policy.recommendedMethod,
       eraseScope: input.eraseScope,
       eraseFileList: input.eraseFileList ?? Prisma.JsonNull,
@@ -184,6 +185,7 @@ export async function createEraseJob(
       eraseMethod: policy.recommendedMethod,
     },
   });
+  if (queue && !requiresApproval) await queue.addErase(job.id);
   return job;
 }
 

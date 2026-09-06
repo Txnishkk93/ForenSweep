@@ -533,7 +533,7 @@ test("erase creation rejects an invalid confirmation", async () => {
   assert.equal(body.error.code, "INVALID_CONFIRMATION");
 });
 
-test("only admins can approve and approved jobs retain approver data", async () => {
+test("whole-drive simulation jobs do not wait for admin approval", async () => {
   const createResponse = await request(jobApp, "/api/jobs/erase", {
     method: "POST",
     headers: authHeader("OPERATOR"),
@@ -543,24 +543,12 @@ test("only admins can approve and approved jobs retain approver data", async () 
       typeToConfirm: baseDevice.serial,
     }),
   });
-  const created = (await createResponse.json()) as { data: { id: string } };
-  const denied = await request(jobApp, `/api/jobs/${created.data.id}/approve`, {
-    method: "POST",
-    headers: authHeader("OPERATOR"),
-  });
-  assert.equal(denied.status, 403);
-  const approved = await request(
-    jobApp,
-    `/api/jobs/${created.data.id}/approve`,
-    { method: "POST", headers: authHeader("ADMIN") },
-  );
-  const approvedBody = (await approved.json()) as {
-    data: { approvalStatus: string; approvedById: string; approvedAt: string };
+  const createdBody = (await createResponse.json()) as {
+    data: { approvalStatus: string; stage: string };
   };
-  assert.equal(approved.status, 200);
-  assert.equal(approvedBody.data.approvalStatus, "APPROVED");
-  assert.equal(approvedBody.data.approvedById, fakeUser.id);
-  assert.ok(approvedBody.data.approvedAt);
+  assert.equal(createResponse.status, 201);
+  assert.equal(createdBody.data.approvalStatus, "NOT_REQUIRED");
+  assert.equal(createdBody.data.stage, "QUEUED");
 });
 
 test("investigators can create recovery jobs but not erase jobs", async () => {
@@ -599,11 +587,6 @@ test("job audit events contain hash-chain fields", async () => {
       (audit) => audit.action === "ERASE_REQUESTED" && audit.eventHash,
     ),
   );
-  assert.ok(
-    audits.some(
-      (audit) => audit.action === "ERASE_APPROVED" && audit.previousHash,
-    ),
-  );
 });
 
 test("approved erase and recovery creation enqueue internal job IDs", async () => {
@@ -617,14 +600,7 @@ test("approved erase and recovery creation enqueue internal job IDs", async () =
     }),
   });
   const eraseBody = (await eraseResponse.json()) as { data: { id: string } };
-  assert.equal(
-    queuedJobs.some((entry) => entry.name === "erase"),
-    false,
-  );
-  await request(jobAppWithQueue, `/api/jobs/${eraseBody.data.id}/approve`, {
-    method: "POST",
-    headers: authHeader("ADMIN"),
-  });
+  assert.ok(queuedJobs.some((entry) => entry.name === "erase"));
   const recoveryResponse = await request(jobAppWithQueue, "/api/jobs/recover", {
     method: "POST",
     headers: authHeader("INVESTIGATOR"),

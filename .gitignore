@@ -11,6 +11,14 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
+
+# Secrets — never commit
+**/secrets/
+*.pem
+*.key
+protected-devices.json
+*confirm-phrase*
 
 # Testing
 coverage
@@ -27,6 +35,22 @@ out/
 build
 dist
 
+# Storage — generated/runtime data, not source
+storage/
+**/storage/safe-images/
+**/storage/output/
+*.img
+
+# Python worker
+apps/forensic-worker/.venv/
+apps/forensic-worker/__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Prisma
+packages/db/prisma/*.db
+packages/db/prisma/migrations/dev/
 
 # Debug
 npm-debug.log*
@@ -35,4 +59,3 @@ yarn-error.log*
 
 # Misc
 .DS_Store
-*.pem

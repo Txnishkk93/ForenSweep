@@ -23,7 +23,7 @@ export const deviceProfileSchema = z.object({
   serial: z.string().nullable(),
   sizeBytes: z
     .string()
-    .regex(/^\\d+$/)
+    .regex(/^\d+$/)
     .nullable(),
   supportsAta: z.boolean(),
   supportsNvme: z.boolean(),
