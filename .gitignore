@@ -5,13 +5,8 @@ node_modules
 .pnp
 .pnp.js
 
-# Local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.*.local
+# Local env files — block everything starting with .env, no exceptions
+.env*
 
 # Secrets — never commit
 **/secrets/
