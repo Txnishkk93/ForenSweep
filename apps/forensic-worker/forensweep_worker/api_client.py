@@ -48,3 +48,6 @@ class WorkerApiClient:
 
     def recovered_file(self, job_id: str, payload: dict[str, Any]) -> None:
         self._request("POST", f"/internal/jobs/{job_id}/recovered-files", payload)
+
+    def sync_devices(self, payload: list[dict[str, Any]]) -> dict[str, Any]:
+        return self._request("POST", "/internal/devices/sync", {"devices": payload})

@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../lib/prisma.js";
 import { createToken } from "../../lib/jwt.js";
-import type { LoginInput } from "./auth.schemas.js";
+import type { LoginInput, SignupInput } from "./auth.schemas.js";
 import type { AuthUser, PublicUser } from "./auth.types.js";
 
 export type UserStore = Pick<typeof prisma, "user">;
@@ -39,6 +39,45 @@ export async function login(
     userStore,
   );
   if (!user) return null;
+  return {
+    accessToken: createToken({
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+    }),
+    tokenType: "Bearer",
+    expiresIn: "8h",
+    user: toPublicUser(user),
+  };
+}
+
+export async function signup(
+  input: SignupInput,
+  userStore: UserStore = prisma,
+): Promise<{
+  accessToken: string;
+  tokenType: "Bearer";
+  expiresIn: string;
+  user: PublicUser;
+}> {
+  const username = input.username.trim();
+  const email = input.email.trim().toLowerCase();
+  const existingUser = await userStore.user.findFirst({
+    where: { OR: [{ username }, { email }] },
+  });
+  if (existingUser) {
+    throw new Error("USER_ALREADY_EXISTS");
+  }
+
+  const user = (await userStore.user.create({
+    data: {
+      username,
+      email,
+      passwordHash: await bcrypt.hash(input.password, 12),
+      role: "OPERATOR",
+    },
+  })) as AuthUser;
+
   return {
     accessToken: createToken({
       sub: user.id,

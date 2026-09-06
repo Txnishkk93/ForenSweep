@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, $Enums } from "@prisma/client";
 import { Router, type Router as RouterType } from "express";
 import { z } from "zod";
 import { requireWorkerToken } from "../../middleware/worker-auth.js";
@@ -11,6 +11,7 @@ import {
   internalJobParamsSchema,
   internalProgressSchema,
 } from "./internal.schemas.js";
+import { deviceSyncSchema } from "./device-sync.schemas.js";
 import { appendAuditEvent } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -25,6 +26,53 @@ export function createInternalRoutes(
 ): RouterType {
   const routes = Router();
   routes.use(requireWorkerToken);
+
+  routes.post(
+    "/devices/sync",
+    validateBody(deviceSyncSchema),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof deviceSyncSchema>;
+      const syncedAt = new Date();
+      for (const device of body.devices) {
+        const existing = await prisma.device.findFirst({
+          where: { path: device.path },
+          select: { id: true },
+        });
+        const deviceType: $Enums.DeviceType = device.transport === "nvme"
+          ? "SSD"
+          : device.transport === "usb"
+            ? "USB"
+            : device.transport === "mmc"
+              ? "SD_CARD"
+              : device.rotational === true
+                ? "HDD"
+                : "SSD";
+        const data: Prisma.DeviceUncheckedCreateInput = {
+            path: device.path,
+            model: device.model,
+            serial: device.serial,
+            sizeBytes: device.size === null ? null : BigInt(device.size),
+            type: deviceType,
+            supportsAta: device.supports_ata,
+            supportsNvme: device.supports_nvme,
+            supportsSed: device.supports_sed,
+            mounted: device.mounted,
+            isSystemDisk: device.system_disk,
+            capabilitySnapshot: device.capability_evidence as Prisma.InputJsonObject,
+            lastSeenAt: syncedAt,
+          };
+        if (existing) {
+          await prisma.device.update({ where: { id: existing.id }, data });
+        } else {
+          await prisma.device.create({ data });
+        }
+      }
+      res.json({
+        success: true,
+        data: { deviceCount: body.devices.length, syncedAt: syncedAt.toISOString() },
+      });
+    }),
+  );
 
   routes.get(
     "/jobs/:jobId/worker-context",

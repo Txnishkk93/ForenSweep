@@ -4,9 +4,11 @@ import { sendSuccess } from "../../lib/serialize.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { getUserById, login, type UserStore } from "./auth.service.js";
+import { signup } from "./auth.service.js";
 
 export function createAuthController(userStore: UserStore = prisma): {
   login: RequestHandler;
+  signup: RequestHandler;
   me: RequestHandler;
 } {
   return {
@@ -20,6 +22,21 @@ export function createAuthController(userStore: UserStore = prisma): {
         );
       result.expiresIn = env.JWT_EXPIRES_IN;
       sendSuccess(res, result, 200, { requestId: req.requestId });
+    },
+    signup: async (req, res) => {
+      try {
+        const result = await signup(req.body, userStore);
+        result.expiresIn = env.JWT_EXPIRES_IN;
+        sendSuccess(res, result, 201, { requestId: req.requestId });
+      } catch (error) {
+        if (error instanceof Error && error.message === "USER_ALREADY_EXISTS")
+          throw new AppError(
+            409,
+            "USER_ALREADY_EXISTS",
+            "Username or email is already registered",
+          );
+        throw error;
+      }
     },
     me: async (req, res) => {
       const user = await getUserById(req.auth!.userId, userStore);
@@ -36,4 +53,5 @@ export function createAuthController(userStore: UserStore = prisma): {
 
 const defaultController = createAuthController();
 export const loginController: RequestHandler = defaultController.login;
+export const signupController: RequestHandler = defaultController.signup;
 export const meController: RequestHandler = defaultController.me;

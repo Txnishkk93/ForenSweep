@@ -1,0 +1,296 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/Button";
+import { DataCard, MonoText } from "@/components/Primitives";
+import { StatusBadge } from "@/components/StatusBadge";
+import { createEraseJob, getDeviceProfile, getDevices, profileToPlan } from "@/lib/backend-api";
+import { formatBytes } from "@/lib/status-colors";
+import type { Device, SanitizationPlan } from "@/lib/types";
+
+type Scope = "whole_drive" | "files";
+type Standard = "NIST_800_88" | "DOD_5220_22_M";
+
+const STEPS = ["Device", "Scope", "Standard", "Preview", "Confirm", "Submit"];
+
+export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
+  const router = useRouter();
+  const [step, setStep] = useState(0);
+  const [deviceId, setDeviceId] = useState<string>(initialDeviceId ?? "");
+  const [scope, setScope] = useState<Scope>("whole_drive");
+  const [fileList, setFileList] = useState("");
+  const [standard, setStandard] = useState<Standard>("NIST_800_88");
+  const [confirmText, setConfirmText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [plan, setPlan] = useState<SanitizationPlan | undefined>();
+  const [loadingDevices, setLoadingDevices] = useState(true);
+
+  const device = devices.find((d) => d.id === deviceId);
+  const requiredConfirm = device?.serial ?? "ERASE";
+  const canProceedFromConfirm = confirmText === requiredConfirm;
+
+  useEffect(() => {
+    getDevices()
+      .then(setDevices)
+      .catch((requestError) =>
+        setSubmitError(requestError instanceof Error ? requestError.message : "Unable to load devices."),
+      )
+      .finally(() => setLoadingDevices(false));
+  }, []);
+
+  useEffect(() => {
+    if (!deviceId) {
+      setPlan(undefined);
+      return;
+    }
+    getDeviceProfile(deviceId)
+      .then((profile) => setPlan(profileToPlan(profile)))
+      .catch((requestError) =>
+        setSubmitError(requestError instanceof Error ? requestError.message : "Unable to load device policy."),
+      );
+  }, [deviceId]);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      if (!device || !plan) throw new Error("Select a device with an available policy.");
+      const job = await createEraseJob({
+        deviceId: device.id,
+        eraseScope: scope === "whole_drive" ? "WHOLE_DRIVE" : "SPECIFIC_FILES",
+        requestedMethod: plan.method,
+        standard,
+        typeToConfirm: confirmText,
+        ...(scope === "files"
+          ? { eraseFileList: fileList.split(/\r?\n/).map((path) => path.trim()).filter(Boolean) }
+          : {}),
+      });
+      router.push(`/erase/${job.id}`);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Could not submit job."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl">
+      <div className="mb-8 flex items-center gap-2">
+        {STEPS.map((label, i) => (
+          <div key={label} className="flex items-center gap-2">
+            <div
+              className={
+                "flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-medium " +
+                (i === step
+                  ? "bg-destructive text-white"
+                  : i < step
+                  ? "bg-success-soft text-success"
+                  : "bg-surface-strong text-body-muted")
+              }
+            >
+              {i + 1}
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className="h-px w-6 bg-hairline-strong" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {step === 0 && (
+        <DataCard>
+          <p className="mb-3 text-[15px] font-medium text-ink">Select device</p>
+          <div className="flex flex-col gap-2">
+            {loadingDevices && <p className="text-sm text-body-muted">Loading devices...</p>}
+            {devices.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setDeviceId(d.id)}
+                className={
+                  "rounded border px-4 py-3 text-left transition-colors " +
+                  (deviceId === d.id
+                    ? "border-primary bg-primary-soft"
+                    : "border-hairline-strong hover:bg-canvas-soft")
+                }
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[14px] font-medium text-ink">
+                    {d.model} · {d.type}
+                  </p>
+                  <span className="text-[13px] text-body-muted">
+                    {formatBytes(d.sizeBytes)}
+                  </span>
+                </div>
+                <MonoText className="mt-1">{d.path}</MonoText>
+              </button>
+            ))}
+          </div>
+        </DataCard>
+      )}
+
+      {step === 1 && (
+        <DataCard>
+          <p className="mb-3 text-[15px] font-medium text-ink">Select scope</p>
+          <div className="flex flex-col gap-3">
+            <label className="flex items-start gap-3 rounded border border-hairline-strong p-4">
+              <input
+                type="radio"
+                checked={scope === "whole_drive"}
+                onChange={() => setScope("whole_drive")}
+                className="mt-1"
+              />
+              <div>
+                <p className="text-[14px] font-medium text-ink">Whole drive</p>
+                <p className="text-[13px] text-body-muted">
+                  Sanitizes the entire device. Requires admin approval before
+                  execution.
+                </p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 rounded border border-hairline-strong p-4">
+              <input
+                type="radio"
+                checked={scope === "files"}
+                onChange={() => setScope("files")}
+                className="mt-1"
+              />
+              <div className="w-full">
+                <p className="text-[14px] font-medium text-ink">
+                  Specific files or folders
+                </p>
+                {scope === "files" && (
+                  <textarea
+                    value={fileList}
+                    onChange={(e) => setFileList(e.target.value)}
+                    placeholder="One path per line"
+                    className="mt-2 w-full rounded border border-hairline-strong p-2 font-mono text-[13px]"
+                    rows={3}
+                  />
+                )}
+              </div>
+            </label>
+          </div>
+        </DataCard>
+      )}
+
+      {step === 2 && (
+        <DataCard>
+          <p className="mb-3 text-[15px] font-medium text-ink">
+            Select standard
+          </p>
+          <div className="flex flex-col gap-2">
+            {(["NIST_800_88", "DOD_5220_22_M"] as Standard[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStandard(s)}
+                className={
+                  "rounded border px-4 py-3 text-left text-[14px] font-medium transition-colors " +
+                  (standard === s
+                    ? "border-primary bg-primary-soft text-primary-active"
+                    : "border-hairline-strong text-ink hover:bg-canvas-soft")
+                }
+              >
+                {s === "NIST_800_88" ? "NIST SP 800-88 Rev. 2" : "DoD 5220.22-M"}
+              </button>
+            ))}
+          </div>
+        </DataCard>
+      )}
+
+      {step === 3 && plan && device && (
+        <DataCard>
+          <p className="mb-3 text-[15px] font-medium text-ink">
+            Recommendation preview
+          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-[18px] font-medium text-ink">{plan.method}</p>
+            <StatusBadge label={`NIST: ${plan.nistCategory}`} tone="info" />
+          </div>
+          <p className="mt-2 text-[14px] text-body">{plan.justification}</p>
+          {plan.limitations && (
+            <div className="mt-4 rounded border border-warning/30 bg-warning-soft p-4">
+              <p className="text-[13px] font-medium text-warning">
+                Limitation
+              </p>
+              <p className="mt-1 text-[13px] text-warning">
+                {plan.limitations}
+              </p>
+            </div>
+          )}
+        </DataCard>
+      )}
+
+      {step === 4 && device && (
+        <DataCard className="border-destructive/40 bg-destructive-soft">
+          <p className="text-[15px] font-semibold text-destructive-active">
+            This action is irreversible
+          </p>
+          <p className="mt-1 text-[13px] text-destructive-active/90">
+            You are about to sanitize <strong>{device.model}</strong> (
+            {device.path}) using {plan?.method}. Data will not be recoverable
+            through normal means once this completes and verification passes.
+          </p>
+          <p className="mt-4 text-[13px] font-medium text-destructive-active">
+            Type the device serial to confirm: <MonoText>{requiredConfirm}</MonoText>
+          </p>
+          <input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            className="mt-2 w-full rounded border border-destructive/40 bg-white px-3 py-2 font-mono text-[13px]"
+            placeholder="Type serial exactly"
+          />
+        </DataCard>
+      )}
+
+      {step === 5 && (
+        <DataCard>
+          <p className="text-[15px] font-medium text-ink">Ready to submit</p>
+          <p className="mt-1 text-[13px] text-body-muted">
+            The job will be created and, if scope is whole drive, will require
+            admin approval before it runs.
+          </p>
+          {submitError && (
+            <p className="mt-3 text-[13px] text-destructive-active">
+              {submitError}
+            </p>
+          )}
+        </DataCard>
+      )}
+
+      <div className="mt-6 flex justify-between">
+        <Button
+          variant="secondary"
+          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          disabled={step === 0}
+        >
+          Back
+        </Button>
+        {step < STEPS.length - 1 ? (
+          <Button
+            variant={step === 4 ? "destructive" : "primary"}
+            onClick={() => setStep((s) => s + 1)}
+            disabled={
+              (step === 0 && !deviceId) ||
+              (step === 4 && !canProceedFromConfirm)
+            }
+          >
+            {step === 4 ? "Confirm and continue" : "Continue"}
+          </Button>
+        ) : (
+          <Button
+            variant="destructive"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? "Submitting…" : "Submit erasure job"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
