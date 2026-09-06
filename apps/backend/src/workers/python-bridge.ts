@@ -1,9 +1,21 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { simulateJob } from "./simulation.js";
 import path from "node:path";
 import type { EventPublisher } from "../lib/publisher.js";
 
-const workerCwd = path.resolve(process.cwd(), "apps", "forensic-worker");
+const workerCwd = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+  "forensic-worker",
+);
+const pythonExecutable =
+  process.platform === "win32" && existsSync(path.join(workerCwd, ".venv", "Scripts", "python.exe"))
+    ? path.join(workerCwd, ".venv", "Scripts", "python.exe")
+    : "python";
 const workerEnv = {
   ...process.env,
   SAFE_IMAGE_ROOT: "../../storage/safe-images",
@@ -18,7 +30,7 @@ export async function runEraseWithPython(jobId: string): Promise<void> {
   if (!uuidPattern.test(jobId)) throw new Error("Invalid internal job ID");
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      "python",
+      pythonExecutable,
       ["-m", "forensweep_worker.main", "erase", "--job-id", jobId],
       {
         cwd: workerCwd,
@@ -57,7 +69,7 @@ export async function runRecoverWithPython(jobId: string): Promise<void> {
   if (!uuidPattern.test(jobId)) throw new Error("Invalid internal job ID");
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      "python",
+      pythonExecutable,
       ["-m", "forensweep_worker.main", "recover", "--job-id", jobId],
       { shell: false, cwd: workerCwd, env: workerEnv, stdio: "inherit" },
     );

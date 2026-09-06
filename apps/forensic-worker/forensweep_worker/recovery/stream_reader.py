@@ -9,6 +9,7 @@ from pathlib import Path
 class Chunk:
     offset: int
     data: bytes
+    bytes_read: int
 
 
 def read_chunks(path: Path, chunk_size: int, overlap: int = 16) -> Iterator[Chunk]:
@@ -22,6 +23,6 @@ def read_chunks(path: Path, chunk_size: int, overlap: int = 16) -> Iterator[Chun
             if not block:
                 break
             combined = carry + block
-            yield Chunk(offset=max(offset - len(carry), 0), data=combined)
+            yield Chunk(offset=max(offset - len(carry), 0), data=combined, bytes_read=len(block))
             offset += len(block)
             carry = combined[-overlap:]

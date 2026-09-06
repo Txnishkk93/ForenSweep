@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import re
+import json
+import logging
 from pathlib import Path
 
 from ..api_client import WorkerApiClient
 from ..config import Config
 from ..recovery.carver import scan_and_carve
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _job_directory(root: Path, job_id: str) -> Path:
@@ -31,11 +35,15 @@ def run_recovery(job_id: str, config: Config, client: WorkerApiClient) -> None:
     if source.stat().st_size > config.max_image_size:
         raise ValueError("Source image exceeds the configured maximum size")
     output_dir = _job_directory(config.output_root, job_id)
-    client.audit(job_id, {"action": "RECOVERY_STARTED", "detail": {"formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"], "simulated": True}})
+    scan_type = str(job.get("scanType") or "QUICK").upper()
+    if scan_type not in {"QUICK", "DEEP"}:
+        raise ValueError(f"Unsupported recovery scan type: {scan_type}")
+    _LOGGER.info(json.dumps({"event": "recovery_scan_started", "jobId": job_id, "scanType": scan_type, "source": str(source), "sourceBytes": source.stat().st_size}))
+    client.audit(job_id, {"action": "RECOVERY_STARTED", "detail": {"formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"], "scanType": scan_type, "simulated": True}})
     client.progress(job_id, {"stage": "CARVING", "progress": 1, "progressDetail": {"simulated": True, "formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"]}})
-    results = scan_and_carve(source, output_dir, chunk_size=config.chunk_size, max_candidates=config.max_candidates, max_duration_seconds=config.max_duration_seconds, max_extraction_size=config.max_extraction_size)
+    results = scan_and_carve(source, output_dir, chunk_size=config.chunk_size, max_candidates=config.max_candidates, max_duration_seconds=config.max_duration_seconds, max_extraction_size=config.max_extraction_size, scan_type=scan_type)
     for result in results:
         client.recovered_file(job_id, result)
     client.progress(job_id, {"stage": "VALIDATING", "progress": 99, "progressDetail": {"simulated": True, "candidateCount": len(results)}})
-    client.complete(job_id, {"verified": True, "verificationData": {"recoveredCandidateCount": len(results), "formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"]}})
+    client.complete(job_id, {"verified": True, "verificationData": {"recoveredCandidateCount": len(results), "formats": ["JPEG", "PDF", "PNG", "ZIP", "DOCX"], "scanType": scan_type}})
     client.audit(job_id, {"action": "RECOVERY_COMPLETED", "detail": {"candidateCount": len(results), "simulated": True}})
