@@ -24,6 +24,32 @@ const fakeStore = {
   user: { findFirst: async () => fakeUser, findUnique: async () => fakeUser },
 } as never;
 const app = createApp({ userStore: fakeStore });
+const signupUsers: typeof fakeUser[] = [];
+const signupStore = {
+  user: {
+    findFirst: async ({ where }: { where: { OR: Array<Record<string, string>> } }) =>
+      signupUsers.find((user) =>
+        where.OR.some(
+          (condition) =>
+            user.username === condition.username || user.email === condition.email,
+        ),
+      ) ?? null,
+    findUnique: async () => null,
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      const user = {
+        id: `00000000-0000-0000-0000-${String(signupUsers.length + 2).padStart(12, "0")}`,
+        username: data.username as string,
+        email: data.email as string,
+        passwordHash: data.passwordHash as string,
+        role: data.role as "OPERATOR",
+        createdAt: new Date(),
+      };
+      signupUsers.push(user);
+      return user;
+    },
+  },
+} as never;
+const signupApp = createApp({ userStore: signupStore });
 const baseDevice = {
   id: "00000000-0000-4000-8000-000000000101",
   path: "SAFE_IMAGE_ROOT/demo.img",
@@ -158,6 +184,46 @@ test("login validation rejects malformed input", async () => {
   };
   assert.equal(response.status, 400);
   assert.equal(body.error.code, "VALIDATION_ERROR");
+});
+
+test("signup and register create operator users with access tokens", async () => {
+  for (const path of ["/api/auth/signup", "/api/auth/register"]) {
+    const response = await request(signupApp, path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: `new-user-${path.endsWith("signup") ? "one" : "two"}`,
+        email: `${path.slice(-6)}@example.test`,
+        password: "password123",
+      }),
+    });
+    const body = (await response.json()) as {
+      success: boolean;
+      data: { accessToken: string; user: Record<string, unknown> };
+    };
+    assert.equal(response.status, 201);
+    assert.equal(body.success, true);
+    assert.ok(body.data.accessToken);
+    assert.equal(body.data.user.role, "OPERATOR");
+    assert.equal("passwordHash" in body.data.user, false);
+  }
+  assert.equal(signupUsers.length, 2);
+  assert.notEqual(signupUsers[0].passwordHash, "password123");
+});
+
+test("signup rejects duplicate usernames or emails", async () => {
+  const response = await request(signupApp, "/api/auth/signup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      username: "new-user-one",
+      email: "different@example.test",
+      password: "password123",
+    }),
+  });
+  const body = (await response.json()) as { error: { code: string } };
+  assert.equal(response.status, 409);
+  assert.equal(body.error.code, "USER_ALREADY_EXISTS");
 });
 
 test("protected routes reject missing authentication", async () => {

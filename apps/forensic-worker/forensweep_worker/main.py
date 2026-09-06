@@ -5,6 +5,7 @@ import sys
 
 from .api_client import WorkerApiClient
 from .config import load_config
+from .device_discovery import discover_devices
 from .jobs.erase_job import run_erase
 from .jobs.recover_job import run_recovery
 
@@ -16,6 +17,7 @@ def main() -> int:
     erase.add_argument("--job-id", required=True)
     recover = commands.add_parser("recover")
     recover.add_argument("--job-id", required=True)
+    commands.add_parser("discover")
     args = parser.parse_args()
     config = load_config()
     client = WorkerApiClient(config)
@@ -24,6 +26,9 @@ def main() -> int:
             run_erase(args.job_id, config, client)
         elif args.command == "recover":
             run_recovery(args.job_id, config, client)
+        elif args.command == "discover":
+            result = client.sync_devices(discover_devices())
+            print(result)
         return 0
     except Exception as error:
         try:

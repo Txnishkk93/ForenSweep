@@ -20,6 +20,23 @@ python -m forensweep_worker.main erase --job-id <uuid>
 
 The ATA, NVMe, cryptographic, and file-level erase modules are explicit disabled stubs. There is no physical-drive access, Python process execution beyond this controlled module entry point, recovery execution, or shell invocation.
 
+## Read-only Linux device discovery
+
+On Linux, the worker can inventory whole block devices and sync them to the
+backend without performing any erase operation:
+
+```bash
+python -m forensweep_worker.main discover
+```
+
+Discovery uses `lsblk --json` with a fixed argument list. It may additionally
+run read-only `udevadm`, `smartctl --info`, and `nvme id-ctrl` probes when the
+tools are installed. Commands are resolved only from `/bin`, `/usr/bin`,
+`/sbin`, and `/usr/sbin`, device paths are strictly validated, and every probe
+has a timeout. Probe failure produces conservative capability flags and does
+not stop the remaining inventory from syncing. Results are sent to the
+worker-authenticated `POST /internal/devices/sync` endpoint.
+
 ## Recovery MVP
 
 Create a reproducible, copyright-free image containing synthetic JPEG and PDF markers:
