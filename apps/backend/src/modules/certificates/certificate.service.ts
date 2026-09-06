@@ -11,6 +11,7 @@ import type {
   internalCertificateSchema,
   verifyCertificateSchema,
 } from "./certificate.schemas.js";
+import { cacheKeys, getCachedOrFetch } from "../../lib/cache.js";
 
 export type CertificateStore = Pick<
   typeof prisma,
@@ -112,6 +113,26 @@ export async function getCertificateForDownload(
   if (!certificate)
     throw new AppError(404, "CERTIFICATE_NOT_FOUND", "Certificate not found");
   return certificate;
+}
+
+export async function listCertificates(
+  userId: string,
+  isAdmin: boolean,
+  page = 1,
+  pageSize = 50,
+  store: CertificateStore = prisma,
+) {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeSize = Math.min(50, Math.max(1, Math.floor(pageSize)));
+  const read = () => store.certificate.findMany({
+    where: isAdmin ? undefined : { job: { userId } },
+    orderBy: { createdAt: "desc" },
+    take: safeSize,
+    skip: (safePage - 1) * safeSize,
+  });
+  return store === prisma
+    ? getCachedOrFetch(cacheKeys.certificates(userId, safePage, safeSize), 12, read)
+    : read();
 }
 
 export async function verifyCertificate(

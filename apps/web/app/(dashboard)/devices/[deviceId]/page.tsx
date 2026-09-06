@@ -1,35 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
 import { getDevice, getDeviceProfile, profileToPlan } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
-import type { Device, SanitizationPlan } from "@/lib/types";
 
 export default function DeviceDetailPage({
   params,
 }: {
   params: { deviceId: string };
 }) {
-  const [device, setDevice] = useState<Device | null>(null);
-  const [plan, setPlan] = useState<SanitizationPlan | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [{ data: device }, { data: profile, error }] = useQueries({
+    queries: [
+      { queryKey: ["device", params.deviceId], queryFn: () => getDevice(params.deviceId) },
+      { queryKey: ["device-profile", params.deviceId], queryFn: () => getDeviceProfile(params.deviceId) },
+    ],
+  });
+  const plan = profile ? profileToPlan(profile) : null;
 
-  useEffect(() => {
-    Promise.all([getDevice(params.deviceId), getDeviceProfile(params.deviceId)])
-      .then(([loadedDevice, profile]) => {
-        setDevice(loadedDevice);
-        setPlan(profileToPlan(profile));
-      })
-      .catch((requestError) =>
-        setError(requestError instanceof Error ? requestError.message : "Unable to load device."),
-      );
-  }, [params.deviceId]);
-
-  if (error) return <p className="text-sm text-destructive-active">{error}</p>;
+  if (error) return <p className="text-sm text-destructive-active">{error instanceof Error ? error.message : "Unable to load device."}</p>;
   if (!device) return <p className="text-sm text-body-muted">Loading device...</p>;
 
   return (

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createEraseJob, getDeviceProfile, getDevices, profileToPlan, refreshDevices } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
-import type { Device, SanitizationPlan } from "@/lib/types";
 
 type Scope = "whole_drive" | "files";
 type Standard = "NIST_800_88" | "DOD_5220_22_M";
@@ -16,6 +16,7 @@ const STEPS = ["Device", "Scope", "Standard", "Preview", "Confirm", "Submit"];
 
 export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
   const [deviceId, setDeviceId] = useState<string>(initialDeviceId ?? "");
   const [scope, setScope] = useState<Scope>("whole_drive");
@@ -24,54 +25,31 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [plan, setPlan] = useState<SanitizationPlan | undefined>();
-  const [loadingDevices, setLoadingDevices] = useState(true);
   const [refreshingDevices, setRefreshingDevices] = useState(false);
+  const { data: devices = [], isLoading: loadingDevices } = useQuery({ queryKey: ["devices"], queryFn: getDevices });
+  const { data: profile } = useQuery({
+    queryKey: ["device-profile", deviceId],
+    queryFn: () => getDeviceProfile(deviceId),
+    enabled: Boolean(deviceId),
+  });
+  const plan = profile ? profileToPlan(profile) : undefined;
 
   const device = devices.find((d) => d.id === deviceId);
   const requiredConfirm = device?.serial ?? "ERASE";
   const canProceedFromConfirm = confirmText === requiredConfirm;
-
-  useEffect(() => {
-    void loadDevices();
-  }, []);
-
-  async function loadDevices() {
-    setLoadingDevices(true);
-    try {
-      setDevices(await getDevices());
-    } catch (requestError) {
-      setSubmitError(requestError instanceof Error ? requestError.message : "Unable to load devices.");
-    } finally {
-      setLoadingDevices(false);
-    }
-  }
 
   async function handleRefresh() {
     setRefreshingDevices(true);
     setSubmitError(null);
     try {
       await refreshDevices();
-      await loadDevices();
+      await queryClient.invalidateQueries({ queryKey: ["devices"] });
     } catch (requestError) {
       setSubmitError(requestError instanceof Error ? requestError.message : "Unable to rescan devices.");
     } finally {
       setRefreshingDevices(false);
     }
   }
-
-  useEffect(() => {
-    if (!deviceId) {
-      setPlan(undefined);
-      return;
-    }
-    getDeviceProfile(deviceId)
-      .then((profile) => setPlan(profileToPlan(profile)))
-      .catch((requestError) =>
-        setSubmitError(requestError instanceof Error ? requestError.message : "Unable to load device policy."),
-      );
-  }, [deviceId]);
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -88,6 +66,8 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
           ? { eraseFileList: fileList.split(/\r?\n/).map((path) => path.trim()).filter(Boolean) }
           : {}),
       });
+      await queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      await queryClient.invalidateQueries({ queryKey: ["job-summary"] });
       router.push(`/erase/${job.id}`);
     } catch (err) {
       setSubmitError(

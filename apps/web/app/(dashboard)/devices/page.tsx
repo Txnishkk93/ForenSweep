@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getDevices } from "@/lib/backend-api";
@@ -17,18 +17,10 @@ const TYPE_LABEL: Record<DeviceType, string> = {
 };
 
 export default function DevicesPage() {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getDevices()
-      .then(setDevices)
-      .catch((requestError) =>
-        setError(requestError instanceof Error ? requestError.message : "Unable to load devices."),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: devices = [], isLoading: loading, error } = useQuery({
+    queryKey: ["devices"],
+    queryFn: getDevices,
+  });
 
   return (
     <div className="max-w-5xl">
@@ -37,7 +29,7 @@ export default function DevicesPage() {
         title="Connected devices"
       />
       {loading && <p className="mb-4 text-sm text-body-muted">Loading devices...</p>}
-      {error && <p className="mb-4 text-sm text-destructive-active">{error}</p>}
+      {error && <p className="mb-4 text-sm text-destructive-active">{error instanceof Error ? error.message : "Unable to load devices."}</p>}
       <DataCard className="p-0">
         <table className="w-full text-left text-[14px]">
           <thead>

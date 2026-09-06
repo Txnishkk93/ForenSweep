@@ -1,28 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { Button } from "@/components/Button";
-import { getAuditFromJobs, getJobs } from "@/lib/backend-api";
+import { getAuditEvents } from "@/lib/backend-api";
 import type { AuditEvent } from "@/lib/types";
 
 export default function AuditPage() {
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { data: events = [], error } = useQuery({
+    queryKey: ["audit"],
+    queryFn: getAuditEvents,
+  });
   const [openId, setOpenId] = useState<string | null>(null);
   const [chainState, setChainState] = useState<
     "idle" | "checking" | "valid" | "broken"
   >("idle");
 
-  useEffect(() => {
-    getJobs()
-      .then(getAuditFromJobs)
-      .then(setEvents)
-      .catch((requestError) =>
-        setError(requestError instanceof Error ? requestError.message : "Unable to load audit events."),
-      );
-  }, []);
 
   async function verifyChain() {
     setChainState("checking");
@@ -41,7 +35,7 @@ export default function AuditPage() {
         }
       />
 
-      {error && <p className="mb-6 text-sm text-destructive-active">{error}</p>}
+      {error && <p className="mb-6 text-sm text-destructive-active">{error instanceof Error ? error.message : "Unable to load audit events."}</p>}
 
       {chainState === "valid" && (
         <div className="mb-6 rounded-card border border-success/30 bg-success-soft p-4">

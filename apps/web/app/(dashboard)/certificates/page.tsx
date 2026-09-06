@@ -1,36 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DataCard, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getCertificatesFromJobs, getJobs } from "@/lib/backend-api";
-import type { Certificate } from "@/lib/types";
+import { getCertificates } from "@/lib/backend-api";
 
 export default function CertificatesPage() {
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getJobs()
-      .then(getCertificatesFromJobs)
-      .then(setCertificates)
-      .catch((requestError) =>
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load certificates.",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: certificates = [], isLoading: loading, error } = useQuery({
+    queryKey: ["certificates"],
+    queryFn: getCertificates,
+  });
 
   return (
     <div className="max-w-4xl">
       <SectionHeading eyebrow="Chain of custody" title="Certificates" />
       {loading && <p className="mb-4 text-sm text-body-muted">Loading certificates...</p>}
-      {error && <p className="mb-4 text-sm text-destructive-active">{error}</p>}
+        {error && <p className="mb-4 text-sm text-destructive-active">{error instanceof Error ? error.message : "Unable to load certificates."}</p>}
       <DataCard className="p-0">
         <table className="w-full text-left text-[14px]">
           <thead>

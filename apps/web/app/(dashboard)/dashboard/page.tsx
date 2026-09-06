@@ -1,23 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { DataCard, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getCertificatesFromJobs, getDeviceProfile, getDevices, getJobs } from "@/lib/backend-api";
+import { getDeviceProfile, getDevices, getJobSummary, getJobs, profileToPlan } from "@/lib/backend-api";
 import { jobStatusLabel, jobStatusTone } from "@/lib/status-colors";
-import type { Certificate, Device, Job, JobStatus, SanitizationPlan } from "@/lib/types";
-
-function countByStatus(jobs: Job[], status: JobStatus) {
-  return jobs.filter((j) => j.status === status).length;
-}
+import type { JobStatus, SanitizationPlan } from "@/lib/types";
 
 export default function DashboardPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [plans, setPlans] = useState<Record<string, SanitizationPlan>>({});
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { data: jobs = [], error: jobsError } = useQuery({ queryKey: ["jobs"], queryFn: getJobs });
+  const { data: devices = [], error: devicesError } = useQuery({ queryKey: ["devices"], queryFn: getDevices });
+  const { data: jobSummary = {}, error: summaryError } = useQuery({ queryKey: ["job-summary"], queryFn: getJobSummary });
+  const profileQueries = useQueries({
+    queries: devices.map((device) => ({
+      queryKey: ["device-profile", device.id],
+      queryFn: () => getDeviceProfile(device.id),
+    })),
+  });
   const counts: { status: JobStatus; label: string }[] = [
     { status: "QUEUED", label: "Queued" },
     { status: "RUNNING", label: "Running" },
@@ -25,30 +25,15 @@ export default function DashboardPage() {
     { status: "FAILED", label: "Failed" },
   ];
 
+  const plans = Object.fromEntries(
+    devices.flatMap((device, index) => {
+      const profile = profileQueries[index]?.data;
+      return profile ? [[device.id, profileToPlan(profile)]] : [];
+    }),
+  ) as Record<string, SanitizationPlan>;
   const flaggedDevices = devices.filter((device) => plans[device.id]?.limitations);
 
-  useEffect(() => {
-    Promise.all([getJobs(), getDevices()])
-      .then(async ([loadedJobs, loadedDevices]) => {
-        setJobs(loadedJobs);
-        setDevices(loadedDevices);
-        const profiles = await Promise.all(
-          loadedDevices.map((device) =>
-            getDeviceProfile(device.id).then((profile) => [device.id, {
-              method: profile.recommendedMethod ?? "OVERWRITE_MULTI",
-              nistCategory: "CLEAR",
-              justification: profile.sanitizationLabel ?? "",
-              limitations: profile.warnings?.join(" ") || null,
-            } as SanitizationPlan] as const).catch(() => null),
-          ),
-        );
-        setPlans(Object.fromEntries(profiles.filter((entry): entry is readonly [string, SanitizationPlan] => entry !== null)));
-        setCertificates(await getCertificatesFromJobs(loadedJobs));
-      })
-      .catch((requestError) =>
-        setError(requestError instanceof Error ? requestError.message : "Unable to load dashboard data."),
-      );
-  }, []);
+  const error = jobsError ?? devicesError ?? summaryError;
 
   return (
     <div className="flex max-w-5xl flex-col gap-10">
@@ -58,7 +43,7 @@ export default function DashboardPage() {
           Dashboard
         </h1>
       </div>
-      {error && <p className="text-sm text-destructive-active">{error}</p>}
+      {error && <p className="text-sm text-destructive-active">{error instanceof Error ? error.message : "Unable to load dashboard data."}</p>}
 
       <section>
         <div className="grid grid-cols-4 gap-4">
@@ -66,7 +51,7 @@ export default function DashboardPage() {
             <DataCard key={c.status}>
               <p className="text-[13px] text-body-muted">{c.label}</p>
               <p className="mt-1 text-[28px] font-medium tracking-tighter text-ink">
-                {countByStatus(jobs, c.status)}
+                {jobSummary[c.status] ?? 0}
               </p>
             </DataCard>
           ))}
@@ -215,7 +200,9 @@ export default function DashboardPage() {
         />
         <DataCard className="p-0">
           <div className="flex flex-col divide-y divide-hairline">
-            {certificates.map((cert) => (
+            {jobs.filter((job) => job.certificate).map((job) => {
+              const cert = job.certificate!;
+              return (
               <Link
                 key={cert.id}
                 href={`/certificates/${cert.id}`}
@@ -234,7 +221,8 @@ export default function DashboardPage() {
                   tone={cert.verificationResult ? "success" : "destructive"}
                 />
               </Link>
-            ))}
+              );
+            })}
           </div>
         </DataCard>
       </section>
