@@ -66,6 +66,10 @@ Override with `FORENSWEEP_ADMIN_PASSWORD`, `FORENSWEEP_OPERATOR_PASSWORD`, and `
 
 ## Exact Demo Script
 
+### Browser uploads
+
+`POST /api/acquisitions/upload` accepts one `.img` or `.zip` multipart file in the `image` field. Uploads are limited to 500MB by default, receive a UUID-generated server filename, and are validated before being added to the normal `SAFE_IMAGE_ROOT` image list. ZIP uploads are checked and safely extracted with Python `zipfile`; their files are concatenated in archive order into a generated `.img` for the existing read-only recovery worker. The original browser filename is retained only in the `ACQUISITION_UPLOADED` audit detail.
+
 1. Create safe synthetic inputs:
 
 ```powershell

@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { createRecoveryJob, getAvailableImages, getDevices } from "@/lib/backend-api";
+import { createRecoveryJob, getAvailableImages, getDevices, uploadAcquisition } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
 
 export default function NewRecoveryPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [acquisitionId, setAcquisitionId] = useState("");
   const [scanType, setScanType] = useState<"quick" | "deep">("quick");
   const [submitting, setSubmitting] = useState(false);
@@ -19,6 +20,8 @@ export default function NewRecoveryPage() {
   const loadingSources = loadingDevices || loadingImages;
   const sourceError = devicesError ?? imagesError;
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
@@ -40,6 +43,24 @@ export default function NewRecoveryPage() {
     }
   }
 
+  async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    setError(null);
+    try {
+      const result = await uploadAcquisition(file, setUploadProgress);
+      setAcquisitionId(result.acquisitionId);
+      await queryClient.invalidateQueries({ queryKey: ["available-images"] });
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Upload failed. Check file type and size.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl">
       <SectionHeading eyebrow="Forensic recovery" title="Recover deleted files" />
@@ -53,6 +74,17 @@ export default function NewRecoveryPage() {
           has been verified — never against a live device directly.
         </p>
         <div className="flex flex-col gap-2">
+          <label className="mb-2 rounded border border-dashed border-recovery/50 bg-recovery-soft p-4 text-sm text-ink">
+            <span className="font-medium">Upload a forensic image or ZIP test set</span>
+            <input className="mt-2 block w-full text-sm" type="file" accept=".img,.zip" onChange={handleFileSelect} disabled={uploading} />
+            <span className="mt-1 block text-xs text-body-muted">Maximum upload size: 500MB</span>
+            {uploading && (
+              <div className="mt-3">
+                <div className="mb-1 flex justify-between text-xs text-body-muted"><span>Uploading</span><span>{uploadProgress}%</span></div>
+                <progress className="h-2 w-full accent-recovery" max="100" value={uploadProgress} />
+              </div>
+            )}
+          </label>
           {loadingSources && <p className="text-sm text-body-muted">Loading acquisitions...</p>}
           {!loadingSources && !devices.length && !images.length && !error && (
             <p className="text-sm text-body-muted">No verified acquisitions or storage devices detected.</p>

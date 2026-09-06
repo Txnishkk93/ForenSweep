@@ -23,6 +23,7 @@ const rawEnvSchema = z.object({
   INTERNAL_WORKER_TOKEN: z.string().min(1),
   REDIS_URL: z.string().url(),
   SAFE_IMAGE_ROOT: z.string().min(1),
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(500 * 1024 * 1024),
   SAFE_OUTPUT_ROOT: z.string().min(1),
   REAL_DEVICE_OPERATIONS: booleanFromString.default(false),
   CORS_ORIGIN: z.string().url().default("http://localhost:3000"),
