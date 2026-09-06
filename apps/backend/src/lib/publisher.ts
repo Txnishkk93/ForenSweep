@@ -1,5 +1,5 @@
 import { jobEventSchema, type JobEvent } from "@repo/shared";
-import { Redis } from "ioredis";
+import { createRedisConnection } from "./redis.js";
 
 export type EventPublisher = {
   publish: (event: JobEvent) => Promise<void>;
@@ -17,7 +17,7 @@ export function createLocalPublisher(
 }
 
 export function createRedisPublisher(redisUrl: string): EventPublisher {
-  const publisher = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  const publisher = createRedisConnection(redisUrl);
   return {
     publish: async (event) => {
       const parsed = jobEventSchema.parse(event);

@@ -16,10 +16,23 @@ export class AppError extends Error {
   }
 }
 
+function isDatabaseConnectivityError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientInitializationError) return true;
+  if (!(error instanceof Error)) return false;
+  const code = (error as Error & { code?: string }).code;
+  return code === "P1001" || code === "P1002" || code === "ECONNREFUSED" || code === "ECONNRESET";
+}
+
 export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   const requestId = req.requestId;
   let appError = error instanceof AppError ? error : undefined;
-  if (error instanceof Prisma.PrismaClientKnownRequestError)
+  if (isDatabaseConnectivityError(error))
+    appError = new AppError(
+      503,
+      "SERVICE_UNAVAILABLE",
+      "The service is temporarily unavailable. Please try again shortly.",
+    );
+  else if (error instanceof Prisma.PrismaClientKnownRequestError)
     appError = new AppError(
       error.code === "P2025" ? 404 : 409,
       error.code,

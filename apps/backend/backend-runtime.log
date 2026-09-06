@@ -1,0 +1,2 @@
+◇ injected env (18) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+{"level":"info","message":"server_started","port":4000,"environment":"development"}

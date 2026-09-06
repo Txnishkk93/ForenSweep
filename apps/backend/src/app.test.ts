@@ -261,6 +261,32 @@ test("valid login returns a token and public user", async () => {
   assert.equal("passwordHash" in body.data.user, false);
 });
 
+test("login returns 503 when the database is unavailable", async () => {
+  const databaseError = Object.assign(new Error("connect ECONNREFUSED"), {
+    code: "ECONNREFUSED",
+  });
+  const unavailableApp = createApp({
+    userStore: {
+      user: {
+        findFirst: async () => {
+          throw databaseError;
+        },
+      },
+    } as never,
+  });
+  const response = await request(unavailableApp, "/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ identifier: "admin", password: "password123" }),
+  });
+  const body = (await response.json()) as {
+    error: { code: string; message: string };
+  };
+  assert.equal(response.status, 503);
+  assert.equal(body.error.code, "SERVICE_UNAVAILABLE");
+  assert.match(body.error.message, /temporarily unavailable/i);
+});
+
 test("auth me returns the public user for a valid token", async () => {
   const token = createToken({
     sub: fakeUser.id,

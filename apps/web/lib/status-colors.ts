@@ -27,6 +27,8 @@ export function jobStatusTone(status: JobStatus): Tone {
       return "success";
     case "FAILED":
       return "destructive";
+    case "CANCELLED":
+      return "neutral";
   }
 }
 
@@ -42,6 +44,8 @@ export function jobStatusLabel(status: JobStatus): string {
       return "Completed";
     case "FAILED":
       return "Failed";
+    case "CANCELLED":
+      return "Cancelled";
   }
 }
 

@@ -22,6 +22,8 @@ function useLiveJob(jobId: string) {
 
   useEffect(() => {
     let active = true;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const terminalStatuses: JobStatus[] = ["COMPLETED", "FAILED", "CANCELLED"];
     const refresh = async () => {
       try {
         const job = await getJob(jobId);
@@ -33,15 +35,17 @@ function useLiveJob(jobId: string) {
         setApproved(job.approvalStatus === "APPROVED" || job.approvalStatus === "NOT_REQUIRED");
         setCurrentPass(String((job as unknown as { stage?: string; currentPass?: number }).stage ?? (job as unknown as { currentPass?: number }).currentPass ?? "Processing"));
         setCertificateId(job.certificate?.id ?? null);
+        if (!terminalStatuses.includes(job.status)) {
+          timeout = setTimeout(() => void refresh(), 2000);
+        }
       } catch (requestError) {
         if (active) setError(requestError instanceof Error ? requestError.message : "Unable to load job.");
       }
     };
     void refresh();
-    const interval = setInterval(() => void refresh(), 2000);
     return () => {
       active = false;
-      clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
     };
   }, [jobId]);
 

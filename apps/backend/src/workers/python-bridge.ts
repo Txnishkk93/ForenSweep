@@ -1,6 +1,15 @@
 import { spawn } from "node:child_process";
 import { simulateJob } from "./simulation.js";
+import path from "node:path";
 import type { EventPublisher } from "../lib/publisher.js";
+
+const workerCwd = path.resolve(process.cwd(), "apps", "forensic-worker");
+const workerEnv = {
+  ...process.env,
+  SAFE_IMAGE_ROOT: "../../storage/safe-images",
+  SAFE_OUTPUT_ROOT: "../../storage/output",
+  CERT_PRIVATE_KEY_PATH: "../backend/secrets/forensweep-ed25519-private.pem",
+};
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,6 +21,8 @@ export async function runEraseWithPython(jobId: string): Promise<void> {
       "python",
       ["-m", "forensweep_worker.main", "erase", "--job-id", jobId],
       {
+        cwd: workerCwd,
+        env: workerEnv,
         shell: false,
         stdio: "inherit",
       },
@@ -48,7 +59,7 @@ export async function runRecoverWithPython(jobId: string): Promise<void> {
     const child = spawn(
       "python",
       ["-m", "forensweep_worker.main", "recover", "--job-id", jobId],
-      { shell: false, stdio: "inherit" },
+      { shell: false, cwd: workerCwd, env: workerEnv, stdio: "inherit" },
     );
     child.once("error", reject);
     child.once("exit", (code) =>

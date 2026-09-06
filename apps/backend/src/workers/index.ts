@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
-import { Redis } from "ioredis";
 import { env } from "../config/env.js";
+import { createRedisConnection } from "../lib/redis.js";
 import { simulateJob } from "./simulation.js";
 import { createRedisPublisher } from "../lib/publisher.js";
 import {
@@ -8,7 +8,9 @@ import {
   runRecoverWithFallback,
 } from "./python-bridge.js";
 
-const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const connection = createRedisConnection(env.REDIS_URL, {
+  maxRetriesPerRequest: null,
+});
 const publisher = createRedisPublisher(env.REDIS_URL);
 const eraseWorker = new Worker(
   "forensweep-erase",

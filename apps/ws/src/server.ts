@@ -21,7 +21,17 @@ const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: { origin: process.env.CORS_ORIGIN ?? "http://localhost:3000" },
 });
-const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
+const subscriber = new Redis(redisUrl, {
+  retryStrategy: (times) => Math.min(times * 200, 5000),
+  maxRetriesPerRequest: null,
+});
+subscriber.on("error", (error) => {
+  console.error(JSON.stringify({
+    level: "error",
+    message: "Redis connection error",
+    error: error.message,
+  }));
+});
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token as unknown;

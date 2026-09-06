@@ -13,7 +13,23 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        normalize_json(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def normalize_json(value: Any) -> Any:
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, list):
+        return [normalize_json(item) for item in value]
+    if isinstance(value, dict):
+        return {key: normalize_json(item) for key, item in value.items()}
+    return value
 
 
 def content_hash(payload: dict[str, Any]) -> str:
@@ -54,6 +70,10 @@ def write_pdf(path: Path, payload: dict[str, Any], digest: str) -> None:
     canvas.save()
 
 
+def utc_isoformat(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def create_certificate(context: dict[str, Any], verification: dict[str, Any], config: Any, started_at: datetime) -> dict[str, Any]:
     job = context["job"]
     device = context.get("device") or {}
@@ -66,8 +86,8 @@ def create_certificate(context: dict[str, Any], verification: dict[str, Any], co
         "standard": job.get("standard") or "NIST_800_88",
         "operatorReference": job.get("userId") or "unknown",
         "approvalReference": job.get("approvedById"),
-        "startedAt": started_at.isoformat(),
-        "endedAt": ended_at.isoformat(),
+        "startedAt": utc_isoformat(started_at),
+        "endedAt": utc_isoformat(ended_at),
         "verificationResult": bool(verification["verified"]),
         "residualRiskScore": float(verification["residualRiskScore"]),
         "residualRiskLevel": verification["residualRiskLevel"],
