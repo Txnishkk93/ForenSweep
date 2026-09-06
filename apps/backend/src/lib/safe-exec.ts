@@ -28,7 +28,8 @@ export function safeReadCommand(
       child.kill("SIGKILL");
       if (!settled) {
         settled = true;
-        reject(new Error(`${command} timed out after ${timeoutMs}ms`));
+        const detail = stderr.trim() ? ` stderr: ${stderr.trim()}` : "";
+        reject(new Error(`${command} timed out after ${timeoutMs}ms.${detail}`));
       }
     }, timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
