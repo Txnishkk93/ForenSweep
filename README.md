@@ -1,159 +1,152 @@
-# Turborepo starter
+# ForenSweep SIH Demo Runbook
 
-This Turborepo starter is maintained by the Turborepo core team.
+ForenSweep is a safe, simulation-first forensic workflow. The API, Prisma database, BullMQ queues, Python worker, and authenticated Socket.IO service are wired for a judge-visible demo without physical-drive access.
 
-## Using this example
+## Architecture
 
-Run the following command:
-
-```sh
-npx create-turbo@latest
+```mermaid
+flowchart LR
+  Web[Next.js web] -->|JWT REST| API[Express backend]
+  Web -->|JWT Socket.IO| WS[Authenticated WS]
+  API --> DB[(PostgreSQL / Prisma)]
+  API --> Redis[(Redis / BullMQ)]
+  Redis --> Worker[Python forensic worker]
+  Worker -->|private token| API
+  Worker -->|safe image read-only| IMG[SAFE_IMAGE_ROOT .img]
+  Worker --> OUT[SAFE_OUTPUT_ROOT job outputs]
+  API --> DB
+  WS --> Redis
 ```
 
-## What's inside?
+## Setup
 
-This Turborepo includes the following packages/apps:
+Requirements: Bun 1.3.9, Node 24+, Python 3.11+, Docker Desktop.
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```powershell
+bun install
+docker compose up -d postgres redis
+Copy-Item apps/backend/.env.example apps/backend/.env
+Copy-Item apps/forensic-worker/.env.example apps/forensic-worker/.env
+$env:DATABASE_URL = "postgresql://forensweep:forensweep-dev-only@localhost:5432/forensweep"
+$env:JWT_SECRET = "forensweep-demo-jwt-secret-32-characters-minimum"
+$env:INTERNAL_WORKER_TOKEN = "forensweep-demo-worker-token-32-characters-min"
+bun run --cwd packages/db db:generate
+bun run --cwd packages/db db:migrate
+bun run --cwd packages/db db:seed
 ```
 
-Without global `turbo`, use your package manager:
+Set `DATABASE_URL` in `apps/backend/.env` to `postgresql://forensweep:forensweep-dev-only@localhost:5432/forensweep`. Use the same `INTERNAL_WORKER_TOKEN` and `SAFE_IMAGE_ROOT` values in both env files. Generate local certificate keys; never commit them:
 
-```sh
-cd my-turborepo
-npx turbo build
-bun exec turbo build
-bun exec turbo build
+```powershell
+cd apps/forensic-worker
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e .
+python scripts/generate_dev_key.py
+cd ../..
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Start each process in a separate terminal:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+```powershell
+bun run --cwd apps/backend dev
+bun run --cwd apps/backend worker
+bun run --cwd apps/ws dev
 ```
 
-Without global `turbo`:
+## Seed Accounts
 
-```sh
-npx turbo build --filter=docs
-bun exec turbo build --filter=docs
-bun exec turbo build --filter=docs
+| Username       | Role         | Development password                    |
+| -------------- | ------------ | --------------------------------------- |
+| `admin`        | ADMIN        | `ForenSweep-Admin-Dev-Only!2026`        |
+| `operator`     | OPERATOR     | `ForenSweep-Operator-Dev-Only!2026`     |
+| `investigator` | INVESTIGATOR | `ForenSweep-Investigator-Dev-Only!2026` |
+
+Override with `FORENSWEEP_ADMIN_PASSWORD`, `FORENSWEEP_OPERATOR_PASSWORD`, and `FORENSWEEP_INVESTIGATOR_PASSWORD` before seeding.
+
+## Exact Demo Script
+
+1. Create safe synthetic inputs:
+
+```powershell
+cd apps/forensic-worker
+python scripts/create_demo_image.py --size-mb 1
+python scripts/create_recovery_sample_image.py
+cd ../..
 ```
 
-### Develop
+2. Login:
 
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
+```powershell
+$login = Invoke-RestMethod -Method Post http://localhost:4000/api/auth/login -ContentType 'application/json' -Body '{"identifier":"admin","password":"ForenSweep-Admin-Dev-Only!2026"}'
+$token = $login.data.accessToken
+$headers = @{ Authorization = "Bearer $token" }
 ```
 
-Without global `turbo`, use your package manager:
+3. Inspect seeded device profiles and SSD policy warnings:
 
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
+```powershell
+Invoke-RestMethod http://localhost:4000/api/devices -Headers $headers
+Invoke-RestMethod http://localhost:4000/api/devices/00000000-0000-4000-8000-000000000102/profile -Headers $headers
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+4. Create an operator erase request using the HDD serial confirmation, approve it as admin, and observe simulation progress:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
+```powershell
+$erase = Invoke-RestMethod -Method Post http://localhost:4000/api/jobs/erase -Headers $headers -ContentType 'application/json' -Body '{"deviceId":"00000000-0000-4000-8000-000000000101","eraseScope":"WHOLE_DRIVE","typeToConfirm":"MOCK-HDD-001"}'
+$jobId = $erase.data.id
+Invoke-RestMethod -Method Post "http://localhost:4000/api/jobs/$jobId/approve" -Headers $headers
+Invoke-RestMethod "http://localhost:4000/api/jobs/$jobId" -Headers $headers
+Invoke-RestMethod "http://localhost:4000/api/jobs/$jobId/certificate" -Headers $headers
 ```
 
-Without global `turbo`:
+5. Verify the certificate by submitting its payload, hash, and signature to `POST /api/certificates/verify`. Change one payload field and repeat; the edited payload must fail hash verification.
 
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
+6. Create a recovery job against the registered safe image, then inspect results and export one authorized result:
+
+```powershell
+$recovery = Invoke-RestMethod -Method Post http://localhost:4000/api/jobs/recover -Headers $headers -ContentType 'application/json' -Body '{"deviceId":"00000000-0000-4000-8000-000000000105","scanType":"DEEP"}'
+$recoveryId = $recovery.data.id
+Invoke-RestMethod "http://localhost:4000/api/jobs/$recoveryId/recovered-files" -Headers $headers
+Invoke-RestMethod -Method Post "http://localhost:4000/api/recovered-files/<file-id>/export" -Headers $headers
 ```
 
-### Remote Caching
+Connect Socket.IO with `auth.token`, emit `job:subscribe` with the job ID, and capture `job:progress`, `job:status`, `job:completed`, and `job:failed` events.
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+## Demo Checklist
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+- [ ] Docker PostgreSQL and Redis are healthy.
+- [ ] Prisma migration and seed completed.
+- [ ] Backend, worker, and WS processes are running.
+- [ ] `REAL_DEVICE_OPERATIONS=false` is visible in both env files.
+- [ ] HDD preview recommends multi-pass overwrite.
+- [ ] SATA SSD preview recommends ATA secure erase.
+- [ ] NVMe overwrite request is rejected with a warning.
+- [ ] USB/SD response shows limited assurance.
+- [ ] Erase confirmation and admin approval are visible.
+- [ ] Simulation progress reaches completion.
+- [ ] Certificate verifies, then fails after payload editing.
+- [ ] Recovery returns JPEG/PNG/PDF/DOCX metadata where present.
+- [ ] Confidence, offsets, SHA-256, truncation, and preview fields are visible.
+- [ ] Authorized export succeeds; unauthorized export fails.
+- [ ] WebSocket room subscription is ownership/admin protected.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+## Troubleshooting
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+- **Backend rejects env:** copy `.env.example`, use 32+ character JWT and worker secrets, and keep `REAL_DEVICE_OPERATIONS=false`.
+- **Queue does not progress:** confirm Redis is running and the separate backend worker terminal is active.
+- **Worker cannot reach API:** verify `BACKEND_INTERNAL_URL` and matching `INTERNAL_WORKER_TOKEN`.
+- **Certificate signing fails:** run `python scripts/generate_dev_key.py`, set `CERT_PRIVATE_KEY_PATH` for Python and the matching `CERT_PUBLIC_KEY_PATH` for backend.
+- **No recovery candidates:** ensure the registered device points to a `.img` under `SAFE_IMAGE_ROOT`; use `create_recovery_sample_image.py`.
+- **PDF/JPEG parser is low confidence:** the scanner is conservative and does not reconstruct fragments.
+- **WS connection fails:** confirm `apps/ws` is running on `WS_PORT=4001` and connect with the JWT in Socket.IO `auth.token`.
 
-```sh
-cd my-turborepo
-turbo login
-```
+## Safety and Limitations
 
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- Physical-device operations are disabled by default and are not implemented in this demo.
+- SSD secure erase, NVMe sanitize, crypto erase, and flash-media sanitization are policy recommendations/stubs only.
+- Software overwrite cannot prove physical-cell sanitization on SSD, USB, or SD media.
+- All erasure is simulation-only and restricted to safe `.img` test images.
+- Recovery is read-only and supports JPEG, PNG, PDF, ZIP/DOCX carving only.
+- Fragment reconstruction, macros, execution, thumbnails for non-images, and arbitrary file access are not implemented.
+- Certificates describe the test image and sampled verification regions; they are not an absolute physical-media guarantee.
