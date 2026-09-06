@@ -13,6 +13,7 @@ import {
 } from "./internal.schemas.js";
 import { deviceSyncSchema } from "./device-sync.schemas.js";
 import { appendAuditEvent } from "../../lib/audit.js";
+import { cacheKeys, invalidateCache } from "../../lib/cache.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { serialize } from "../../lib/serialize.js";
@@ -133,6 +134,8 @@ export function createInternalRoutes(
           progressDetail: body.progressDetail as Prisma.InputJsonObject,
         },
       });
+      await invalidateCache(cacheKeys.jobs(updated.userId, 1, 50));
+      await invalidateCache(cacheKeys.jobSummary(updated.userId));
       res.json({
         success: true,
         data: {
@@ -182,6 +185,8 @@ export function createInternalRoutes(
           finishedAt: new Date(),
         },
       });
+      await invalidateCache(cacheKeys.jobs(updated.userId, 1, 50));
+      await invalidateCache(cacheKeys.jobSummary(updated.userId));
       await appendAuditEvent(prisma, {
         userId: updated.userId,
         jobId: updated.id,
@@ -224,6 +229,8 @@ export function createInternalRoutes(
           finishedAt: new Date(),
         },
       });
+      await invalidateCache(cacheKeys.jobs(updated.userId, 1, 50));
+      await invalidateCache(cacheKeys.jobSummary(updated.userId));
       await appendAuditEvent(prisma, {
         userId: updated.userId,
         jobId: updated.id,

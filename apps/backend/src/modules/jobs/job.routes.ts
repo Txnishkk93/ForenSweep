@@ -1,8 +1,10 @@
 import { Router, type Router as RouterType } from "express";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { sendSuccess } from "../../lib/serialize.js";
 import { validateBody, validateParams } from "../../middleware/validate.js";
 import { createJobController } from "./job.controller.js";
+import { getJobSummary, listAuditEvents } from "./job.service.js";
 import {
   createEraseJobSchema,
   createRecoveryJobSchema,
@@ -42,6 +44,22 @@ export function createJobRoutes(
     "/:id/cancel",
     validateParams(jobIdParamsSchema),
     asyncHandler(controller.cancel),
+  );
+  routes.get(
+    "/summary",
+    asyncHandler(async (req, res) =>
+      sendSuccess(res, await getJobSummary(req.auth!.userId, req.auth!.role === "ADMIN"), 200, {
+        requestId: req.requestId,
+      }),
+    ),
+  );
+  routes.get(
+    "/audit",
+    asyncHandler(async (req, res) =>
+      sendSuccess(res, await listAuditEvents(req.auth!.userId, req.auth!.role === "ADMIN"), 200, {
+        requestId: req.requestId,
+      }),
+    ),
   );
   routes.get(
     "/:id/audit",

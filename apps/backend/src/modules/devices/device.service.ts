@@ -7,6 +7,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { ErasePreviewInput } from "./device.schemas.js";
 import { scanAndPersistDevices } from "./discovery.service.js";
+import { cacheKeys, getCachedOrFetch, invalidateCache } from "../../lib/cache.js";
 
 export type DeviceRecord = {
   id: string;
@@ -114,16 +115,12 @@ async function audit(
 export async function listDevices(
   store: DeviceStore = prisma,
 ): Promise<ReturnType<typeof toProfile>[]> {
-  if (store === prisma) await scanAndPersistDevices();
-  const devices = await store.device.findMany({
-    orderBy: { lastSeenAt: "desc" },
-  });
-  return devices.map((device) => ({
-    ...toProfile(device as DeviceRecord),
-    path: device.path,
-    mounted: device.mounted,
-    isSystemDisk: device.isSystemDisk,
-  }));
+  const read = async () => {
+    if (store === prisma) await scanAndPersistDevices();
+    const devices = await store.device.findMany({ orderBy: { lastSeenAt: "desc" } });
+    return devices.map((device) => ({ ...toProfile(device as DeviceRecord), path: device.path, mounted: device.mounted, isSystemDisk: device.isSystemDisk }));
+  };
+  return store === prisma ? getCachedOrFetch(cacheKeys.devices, 4, read) : read();
 }
 
 export async function refreshDevices(
@@ -132,6 +129,7 @@ export async function refreshDevices(
 ) {
   if (store !== prisma) return refreshMockDevices(userId, store);
   const devices = await scanAndPersistDevices(true);
+  await invalidateCache(cacheKeys.devices);
   return { refreshedAt: new Date().toISOString(), deviceCount: devices.length, simulated: false };
 }
 

@@ -13,6 +13,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import {
   getCertificateForUser,
   getCertificateForDownload,
+  listCertificates,
   persistCertificate,
   verifyCertificate,
 } from "./certificate.service.js";
@@ -34,6 +35,14 @@ internalCertificateRoutes.post(
 
 export const certificateRoutes: RouterType = Router();
 certificateRoutes.use(requireAuth);
+certificateRoutes.get(
+  "/certificates",
+  asyncHandler(async (req, res) =>
+    sendSuccess(res, await listCertificates(req.auth!.userId, req.auth!.role === "ADMIN"), 200, {
+      requestId: req.requestId,
+    }),
+  ),
+);
 certificateRoutes.get(
   "/jobs/:id/certificate",
   validateParams(idSchema),

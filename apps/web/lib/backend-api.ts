@@ -73,6 +73,33 @@ export async function getJobs(): Promise<Job[]> {
   return apiFetch<Job[]>("/api/jobs");
 }
 
+export async function getJobSummary(): Promise<Record<string, number>> {
+  return apiFetch<Record<string, number>>("/api/jobs/summary");
+}
+
+function toAuditEvent(event: RawAuditEvent): AuditEvent {
+  return {
+    id: event.id,
+    jobId: event.jobId,
+    userId: event.userId,
+    actorName: event.userId,
+    eventType: event.action,
+    payload: JSON.stringify(event.detail ?? {}),
+    eventHash: event.eventHash,
+    prevEventHash: event.previousHash ?? event.prevEventHash ?? null,
+    timestamp: event.timestamp,
+  };
+}
+
+export async function getAuditEvents(): Promise<AuditEvent[]> {
+  const events = await apiFetch<RawAuditEvent[]>("/api/jobs/audit");
+  return events.map(toAuditEvent);
+}
+
+export async function getCertificates(): Promise<Certificate[]> {
+  return apiFetch<Certificate[]>("/api/certificates");
+}
+
 export async function getJob(jobId: string): Promise<Job> {
   return apiFetch<Job>(`/api/jobs/${jobId}`);
 }
@@ -150,17 +177,7 @@ export async function getCertificatesFromJobs(jobs: Job[]): Promise<Certificate[
 
 export async function getJobAudit(jobId: string): Promise<AuditEvent[]> {
   const events = await apiFetch<RawAuditEvent[]>(`/api/jobs/${jobId}/audit`);
-  return events.map((event) => ({
-    id: event.id,
-    jobId: event.jobId,
-    userId: event.userId,
-    actorName: event.userId,
-    eventType: event.action,
-    payload: JSON.stringify(event.detail ?? {}),
-    eventHash: event.eventHash,
-    prevEventHash: event.previousHash ?? event.prevEventHash ?? null,
-    timestamp: event.timestamp,
-  }));
+  return events.map(toAuditEvent);
 }
 
 export async function getAuditFromJobs(jobs: Job[]): Promise<AuditEvent[]> {

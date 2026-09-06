@@ -1,39 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createRecoveryJob, getAvailableImages, getDevices } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
-import type { AvailableImage, Device } from "@/lib/types";
 
 export default function NewRecoveryPage() {
   const router = useRouter();
   const [acquisitionId, setAcquisitionId] = useState("");
   const [scanType, setScanType] = useState<"quick" | "deep">("quick");
   const [submitting, setSubmitting] = useState(false);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [images, setImages] = useState<AvailableImage[]>([]);
-  const [loadingSources, setLoadingSources] = useState(true);
+  const { data: devices = [], isLoading: loadingDevices, error: devicesError } = useQuery({ queryKey: ["devices"], queryFn: getDevices });
+  const { data: images = [], isLoading: loadingImages, error: imagesError } = useQuery({ queryKey: ["available-images"], queryFn: getAvailableImages });
+  const loadingSources = loadingDevices || loadingImages;
+  const sourceError = devicesError ?? imagesError;
   const [error, setError] = useState<string | null>(null);
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
-
-  useEffect(() => {
-    Promise.all([getDevices(), getAvailableImages()])
-      .then(([loadedDevices, loadedImages]) => {
-        setDevices(loadedDevices);
-        setImages(loadedImages);
-      })
-      .catch((requestError) =>
-        setError(requestError instanceof Error ? requestError.message : "Unable to load acquisitions."),
-      )
-      .finally(() => setLoadingSources(false));
-  }, []);
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -119,7 +107,7 @@ export default function NewRecoveryPage() {
         )}
       </DataCard>
 
-      {error && <p className="mb-4 text-[13px] text-destructive-active">{error}</p>}
+      {(error || sourceError) && <p className="mb-4 text-[13px] text-destructive-active">{error ?? (sourceError instanceof Error ? sourceError.message : "Unable to load acquisitions.")}</p>}
 
       <DataCard className="mb-6">
         <p className="mb-3 text-[15px] font-medium text-ink">Scan type</p>

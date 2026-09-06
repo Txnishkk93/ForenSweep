@@ -13,6 +13,7 @@ import { env, hardwareDemoGate } from "../../config/env.js";
 import fs from "node:fs";
 import bcrypt from "bcryptjs";
 import { resolveAvailableImage } from "../acquisitions/acquisition.service.js";
+import { cacheKeys, getCachedOrFetch, invalidateCache } from "../../lib/cache.js";
 
 export type JobStore = Pick<typeof prisma, "device" | "job" | "auditLog">;
 
@@ -175,6 +176,8 @@ export async function createEraseJob(
       residualRiskLevel: policy.riskLevel,
     },
   });
+  await invalidateCache(cacheKeys.jobs(userId, 1, 50));
+  await invalidateCache(cacheKeys.jobSummary(userId));
   await appendAuditEvent(store, {
     userId,
     jobId: job.id,
@@ -222,6 +225,8 @@ export async function approveEraseJob(
     where: { id },
     data: { approvalStatus: "APPROVED", approvedById: approverId, approvedAt },
   });
+  await invalidateCache(cacheKeys.jobs(job.userId, 1, 50));
+  await invalidateCache(cacheKeys.jobSummary(job.userId));
   await appendAuditEvent(store, {
     userId: approverId,
     jobId: id,
@@ -265,6 +270,8 @@ export async function cancelJob(
     where: { id },
     data: { status: "CANCELLED", errorMessage: hardwareRunning ? "Cancelled by operator" : undefined },
   });
+  await invalidateCache(cacheKeys.jobs(job.userId, 1, 50));
+  await invalidateCache(cacheKeys.jobSummary(job.userId));
   await appendAuditEvent(store, {
     userId,
     jobId: id,
@@ -303,6 +310,8 @@ export async function createRecoveryJob(
         : undefined,
     },
   });
+  await invalidateCache(cacheKeys.jobs(userId, 1, 50));
+  await invalidateCache(cacheKeys.jobSummary(userId));
   await appendAuditEvent(store, {
     userId,
     jobId: job.id,
@@ -322,10 +331,48 @@ export async function listJobs(
   isAdmin: boolean,
   store: JobStore = prisma,
 ) {
-  return store.job.findMany({
+  const page = 1;
+  const pageSize = 50;
+  return getCachedOrFetch(cacheKeys.jobs(userId, page, pageSize), 7, () => store.job.findMany({
     where: isAdmin ? undefined : { userId },
+    include: { device: true, certificate: true },
     orderBy: { createdAt: "desc" },
+    take: pageSize,
+  }));
+}
+
+export async function getJobSummary(
+  userId: string,
+  isAdmin: boolean,
+  store: JobStore = prisma,
+) {
+  const read = async () => {
+    const grouped = await store.job.groupBy({
+      by: ["status"],
+      where: isAdmin ? undefined : { userId },
+      _count: { _all: true },
+    });
+    return Object.fromEntries(grouped.map((entry) => [entry.status, entry._count._all]));
+  };
+  return store === prisma ? getCachedOrFetch(cacheKeys.jobSummary(userId), 7, read) : read();
+}
+
+export async function listAuditEvents(
+  userId: string,
+  isAdmin: boolean,
+  page = 1,
+  pageSize = 100,
+  store: JobStore = prisma,
+) {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeSize = Math.min(100, Math.max(1, Math.floor(pageSize)));
+  const read = () => store.auditLog.findMany({
+    where: isAdmin ? undefined : { job: { userId } },
+    orderBy: { timestamp: "desc" },
+    take: safeSize,
+    skip: (safePage - 1) * safeSize,
   });
+  return store === prisma ? getCachedOrFetch(cacheKeys.audit(userId, safePage, safeSize), 7, read) : read();
 }
 
 export async function getJob(
