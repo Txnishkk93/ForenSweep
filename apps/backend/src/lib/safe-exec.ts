@@ -1,6 +1,13 @@
 import { spawn } from "node:child_process";
 
-const ALLOWED_COMMANDS = new Set(["lsblk", "smartctl", "nvme", "findmnt"]);
+export const ALLOWED_COMMANDS = new Set([
+  "lsblk",
+  "smartctl",
+  "nvme",
+  "findmnt",
+  "diskutil",
+  "powershell.exe",
+]);
 
 export function safeReadCommand(
   command: string,

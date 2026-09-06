@@ -22,12 +22,12 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@repo/db": "workspace:*",
+    "@prisma/client": "^7.10.0",
     "@repo/crypto": "workspace:*",
+    "@repo/db": "workspace:*",
     "@repo/device-policy": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@prisma/client": "^7.10.0",
     "@types/express": "^5.0.6",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.58.5",
@@ -36,6 +36,7 @@
     "express": "^5.2.1",
     "ioredis": "^5.6.1",
     "jsonwebtoken": "^9.0.2",
+    "plist": "^5.0.0",
     "zod": "^4.1.0"
   }
 }

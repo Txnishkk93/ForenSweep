@@ -43,24 +43,6 @@ def validate_image_target(raw_path: str, safe_root: Path) -> Path:
 
 def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
     started_at = datetime.now(timezone.utc)
-    command_args = ["chunked-zero-write", path, "--bytes", str(size)]
-    _LOGGER.warning(json.dumps({
-        "event": "hardware_command_start",
-        "command": "chunked-zero-write",
-        "args": command_args,
-        "start": started_at.isoformat(),
-        "exitCode": None,
-        "byteOffset": 0,
-        "gates": {
-            "REAL_DEVICE_OPERATIONS": True,
-            "HARDWARE_DEMO_ENABLED": True,
-            "HARDWARE_DEMO_ALLOWED_METHOD": "OVERWRITE_SINGLE",
-            "HARDWARE_DEMO_MAX_CAPACITY_BYTES": config.hardware_gate.max_capacity_bytes,
-            "HARDWARE_DEMO_CONFIRM_PHRASE_MATCHED": True,
-        },
-        "operatorUserId": job.get("userId"),
-        "approverUserId": job.get("approvedById"),
-    }))
     context_data = client.context(job_id)["data"]
     job = context_data["job"]
     device = context_data.get("device")
@@ -153,6 +135,24 @@ def _run_hardware_erase(
     stop_requested = Event()
     signal.signal(signal.SIGTERM, lambda _signum, _frame: stop_requested.set())
     started_at = datetime.now(timezone.utc)
+    command_args = ["chunked-zero-write", path, "--bytes", str(size)]
+    _LOGGER.warning(json.dumps({
+        "event": "hardware_command_start",
+        "command": "chunked-zero-write",
+        "args": command_args,
+        "start": started_at.isoformat(),
+        "exitCode": None,
+        "byteOffset": 0,
+        "gates": {
+            "REAL_DEVICE_OPERATIONS": True,
+            "HARDWARE_DEMO_ENABLED": True,
+            "HARDWARE_DEMO_ALLOWED_METHOD": "OVERWRITE_SINGLE",
+            "HARDWARE_DEMO_MAX_CAPACITY_BYTES": config.hardware_gate.max_capacity_bytes,
+            "HARDWARE_DEMO_CONFIRM_PHRASE_MATCHED": True,
+        },
+        "operatorUserId": job.get("userId"),
+        "approverUserId": job.get("approvedById"),
+    }))
     client.audit(job_id, {"action": "HARDWARE_ERASE_STARTED", "detail": {"method": "OVERWRITE_SINGLE", "path": path}})
     processed = overwrite_usb_device(
         Path(path),

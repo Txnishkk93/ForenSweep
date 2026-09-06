@@ -1,6 +1,9 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { logInfo } from "../lib/logger.js";
+
+dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)) });
 
 const booleanFromString = z.preprocess((value) => {
   if (typeof value !== "string") return value;
