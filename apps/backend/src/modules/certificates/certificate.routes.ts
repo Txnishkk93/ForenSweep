@@ -12,6 +12,7 @@ import { appendAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 import {
   getCertificateForUser,
+  getCertificateForDownload,
   persistCertificate,
   verifyCertificate,
 } from "./certificate.service.js";
@@ -75,10 +76,8 @@ certificateRoutes.get(
   "/certificates/:id/download",
   validateParams(idSchema),
   asyncHandler(async (req, res) => {
-    const certificate = await getCertificateForUser(
+    const certificate = await getCertificateForDownload(
       String(req.params.id),
-      req.auth!.userId,
-      req.auth!.role === "ADMIN",
     );
     if (!certificate.pdfPath)
       throw new AppError(

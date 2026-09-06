@@ -1,2 +1,2 @@
-◇ injected env (18) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (18) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 {"level":"info","message":"server_started","port":4000,"environment":"development"}
