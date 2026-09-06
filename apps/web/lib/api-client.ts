@@ -1,4 +1,4 @@
-import { getToken } from "./auth";
+import { clearSession, getToken } from "./auth";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -38,6 +38,10 @@ export async function apiFetch<T>(
     : undefined;
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearSession();
+      window.location.assign("/login");
+    }
     throw new ApiError(
       response.status,
       payload?.error?.message ?? `Request failed with status ${response.status}`,
@@ -53,6 +57,10 @@ export async function apiFetchBlob(path: string): Promise<Blob> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(getUrl(path), { headers });
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearSession();
+      window.location.assign("/login");
+    }
     let message = `Request failed with status ${response.status}`;
     try {
       const payload = (await response.json()) as { error?: { message?: string } };
