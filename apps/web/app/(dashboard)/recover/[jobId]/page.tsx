@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
 import { exportRecoveredFile, getJob, getRecoveredFiles } from "@/lib/backend-api";
 import { confidenceTone, formatBytes } from "@/lib/status-colors";
-import type { Job, RecoveredFile } from "@/lib/types";
+import type { RecoveredFile } from "@/lib/types";
 
 function ScoreBar({ label, value }: { label: string; value: number | undefined }) {
   const v = Math.round((value ?? 0) * 100);
@@ -100,33 +101,26 @@ export default function RecoveryJobDetailPage({
 }: {
   params: { jobId: string };
 }) {
-  const [job, setJob] = useState<Job | null>(null);
-  const [files, setFiles] = useState<RecoveredFile[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const [loadedJob, loadedFiles] = await Promise.all([
-          getJob(params.jobId),
-          getRecoveredFiles(params.jobId),
-        ]);
-        if (active) {
-          setJob(loadedJob);
-          setFiles(loadedFiles);
-        }
-      } catch (requestError) {
-        if (active) setError(requestError instanceof Error ? requestError.message : "Unable to load recovery results.");
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 2000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [params.jobId]);
+  const jobQuery = useQuery({
+    queryKey: ["job", params.jobId],
+    queryFn: () => getJob(params.jobId),
+    refetchInterval: (query) =>
+      ["COMPLETED", "FAILED", "CANCELLED"].includes(query.state.data?.status ?? "")
+        ? false
+        : 2000,
+  });
+  const filesQuery = useQuery({
+    queryKey: ["recovered-files", params.jobId],
+    queryFn: () => getRecoveredFiles(params.jobId),
+    refetchInterval: jobQuery.data && ["COMPLETED", "FAILED", "CANCELLED"].includes(jobQuery.data.status)
+      ? false
+      : 2000,
+  });
+  const job = jobQuery.data;
+  const files = filesQuery.data ?? [];
+  const queryError = jobQuery.error ?? filesQuery.error;
+  const displayError = error ?? (queryError instanceof Error ? queryError.message : null);
 
   async function handleExport(fileId: string) {
     try {
@@ -151,7 +145,7 @@ export default function RecoveryJobDetailPage({
         }
       />
 
-      {error && <p className="mb-6 text-sm text-destructive-active">{error}</p>}
+      {displayError && <p className="mb-6 text-sm text-destructive-active">{displayError}</p>}
 
       <DataCard className="mb-6 border-recovery/30 bg-recovery-soft">
         <p className="text-[13px] text-recovery">
