@@ -104,6 +104,16 @@ export async function getCertificateForUser(
   return certificate;
 }
 
+export async function getCertificateForDownload(
+  id: string,
+  store: CertificateStore = prisma,
+) {
+  const certificate = await store.certificate.findUnique({ where: { id } });
+  if (!certificate)
+    throw new AppError(404, "CERTIFICATE_NOT_FOUND", "Certificate not found");
+  return certificate;
+}
+
 export async function verifyCertificate(
   input: z.infer<typeof verifyCertificateSchema>,
   userId: string,

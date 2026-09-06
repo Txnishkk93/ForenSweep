@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { Button } from "@/components/Button";
 import { downloadCertificate, getCertificate, verifyCertificate } from "@/lib/backend-api";
+import { ApiError } from "@/lib/api-client";
 import type { Certificate } from "@/lib/types";
 
 export default function CertificateDetailPage({
@@ -61,11 +62,13 @@ export default function CertificateDetailPage({
       link.remove();
       URL.revokeObjectURL(url);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to download certificate.",
-      );
+      if (requestError instanceof ApiError && requestError.status === 404)
+        setError("Certificate file not found. Generate the certificate again.");
+      else if (requestError instanceof ApiError && requestError.status >= 500)
+        setError("The certificate service is temporarily unavailable. Try again.");
+      else if (requestError instanceof Error)
+        setError(requestError.message);
+      else setError("Could not download certificate. Try again.");
     } finally {
       setDownloadState("idle");
     }
