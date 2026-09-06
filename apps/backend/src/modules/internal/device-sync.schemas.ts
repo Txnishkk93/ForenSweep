@@ -6,6 +6,7 @@ const deviceSyncRecordSchema = z.object({
   serial: z.string().nullable(),
   size: z.string().regex(/^\d+$/).nullable(),
   mounted: z.boolean(),
+  removable: z.boolean(),
   system_disk: z.boolean(),
   rotational: z.boolean().nullable(),
   transport: z.enum(["sata", "ata", "nvme", "usb", "scsi", "mmc", "unknown"]),

@@ -12,6 +12,7 @@ process.env.SAFE_OUTPUT_ROOT = "../../storage/output";
 const { createApp } = await import("./app.js");
 const { createToken } = await import("./lib/jwt.js");
 const { default: bcrypt } = await import("bcryptjs");
+const { default: jwt } = await import("jsonwebtoken");
 const fakeUser = {
   id: "00000000-0000-4000-8000-000000000001",
   username: "admin",
@@ -297,6 +298,13 @@ test("admin ping enforces role", async () => {
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(forbidden.status, 403);
+  const forbiddenBody = (await forbidden.json()) as {
+    error: { details?: { authorizationCheck?: string } };
+  };
+  assert.equal(
+    forbiddenBody.error.details?.authorizationCheck,
+    "role OPERATOR not in required [ADMIN]",
+  );
   assert.equal(allowed.status, 200);
 });
 
@@ -317,6 +325,25 @@ test("invalid credentials return a generic unauthorized response", async () => {
 test("invalid bearer tokens are rejected", async () => {
   const response = await request(app, "/api/auth/me", {
     headers: { authorization: "Bearer invalid-token" },
+  });
+  const body = (await response.json()) as { error: { code: string } };
+  assert.equal(response.status, 401);
+  assert.equal(body.error.code, "AUTH_TOKEN_INVALID");
+});
+
+test("expired tokens return 401 rather than 403", async () => {
+  const token = jwt.sign(
+    { sub: fakeUser.id, username: fakeUser.username, role: "ADMIN" },
+    process.env.JWT_SECRET!,
+    {
+      algorithm: "HS256",
+      issuer: "forensweep-api",
+      audience: "forensweep-web",
+      expiresIn: -1,
+    },
+  );
+  const response = await request(app, "/api/auth/me", {
+    headers: { authorization: `Bearer ${token}` },
   });
   const body = (await response.json()) as { error: { code: string } };
   assert.equal(response.status, 401);

@@ -29,6 +29,7 @@ export function createJobController(store?: JobStore, queue?: JobQueue) {
           req.auth!.userId,
           store,
           queue,
+          req.body?.approvalPassword,
         ),
         200,
         { requestId: req.requestId },

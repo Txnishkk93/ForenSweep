@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: forensweep-worker
+Version: 0.1.0
+Summary: Safe image-only ForenSweep forensic worker scaffold
+Requires-Python: >=3.11
+Requires-Dist: cryptography>=42
+Requires-Dist: pillow>=10
+Requires-Dist: pypdf>=5
+Requires-Dist: reportlab>=4

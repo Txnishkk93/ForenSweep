@@ -37,6 +37,13 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     requestId,
     code: appError.code,
     statusCode: appError.statusCode,
+    method: req.method,
+    path: req.path,
+    userId: req.auth?.userId ?? "unauthenticated",
+    role: req.auth?.role ?? "unauthenticated",
+    ...(appError.statusCode === 403
+      ? { authorizationCheck: (appError.details as { authorizationCheck?: string } | undefined)?.authorizationCheck ?? "authorization check did not provide a reason" }
+      : {}),
   });
   const details = appError.statusCode < 500 ? appError.details : undefined;
   res.status(appError.statusCode).json({

@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { ErasePreviewInput } from "./device.schemas.js";
+import { scanAndPersistDevices } from "./discovery.service.js";
 
 export type DeviceRecord = {
   id: string;
@@ -113,13 +114,25 @@ async function audit(
 export async function listDevices(
   store: DeviceStore = prisma,
 ): Promise<ReturnType<typeof toProfile>[]> {
+  if (store === prisma) await scanAndPersistDevices();
   const devices = await store.device.findMany({
     orderBy: { lastSeenAt: "desc" },
   });
   return devices.map((device) => ({
     ...toProfile(device as DeviceRecord),
     path: device.path,
+    mounted: device.mounted,
+    isSystemDisk: device.isSystemDisk,
   }));
+}
+
+export async function refreshDevices(
+  userId: string,
+  store: DeviceStore = prisma,
+) {
+  if (store !== prisma) return refreshMockDevices(userId, store);
+  const devices = await scanAndPersistDevices(true);
+  return { refreshedAt: new Date().toISOString(), deviceCount: devices.length, simulated: false };
 }
 
 export async function getDevice(

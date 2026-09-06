@@ -25,7 +25,10 @@ const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token as unknown;
-  if (typeof token !== "string") return next(new Error("AUTH_TOKEN_MISSING"));
+  if (typeof token !== "string") {
+    console.warn(JSON.stringify({ message: "ws_auth_rejected", socketId: socket.id, reason: "AUTH_TOKEN_MISSING" }));
+    return next(new Error("AUTH_TOKEN_MISSING"));
+  }
   try {
     socket.data.auth = jwt.verify(token, jwtSecret, {
       algorithms: ["HS256"],
@@ -34,6 +37,7 @@ io.use((socket, next) => {
     });
     next();
   } catch {
+    console.warn(JSON.stringify({ message: "ws_auth_rejected", socketId: socket.id, reason: "AUTH_TOKEN_INVALID" }));
     next(new Error("AUTH_TOKEN_INVALID"));
   }
 });
@@ -52,8 +56,10 @@ io.on("connection", (socket) => {
         where: { id: jobId },
         select: { userId: true },
       });
-      if (!job || (job.userId !== auth.sub && auth.role !== "ADMIN"))
+      if (!job || (job.userId !== auth.sub && auth.role !== "ADMIN")) {
+        console.warn(JSON.stringify({ message: "ws_subscription_rejected", socketId: socket.id, jobId, userId: auth.sub, role: auth.role, reason: !job ? "JOB_NOT_FOUND" : "job.userId does not match requester" }));
         return acknowledge?.({ ok: false, error: "FORBIDDEN" });
+      }
       await socket.join(`job:${jobId}`);
       acknowledge?.({ ok: true });
     },

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { createEraseJob, getDeviceProfile, getDevices, profileToPlan } from "@/lib/backend-api";
+import { createEraseJob, getDeviceProfile, getDevices, profileToPlan, refreshDevices } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
 import type { Device, SanitizationPlan } from "@/lib/types";
 
@@ -27,19 +27,39 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [plan, setPlan] = useState<SanitizationPlan | undefined>();
   const [loadingDevices, setLoadingDevices] = useState(true);
+  const [refreshingDevices, setRefreshingDevices] = useState(false);
 
   const device = devices.find((d) => d.id === deviceId);
   const requiredConfirm = device?.serial ?? "ERASE";
   const canProceedFromConfirm = confirmText === requiredConfirm;
 
   useEffect(() => {
-    getDevices()
-      .then(setDevices)
-      .catch((requestError) =>
-        setSubmitError(requestError instanceof Error ? requestError.message : "Unable to load devices."),
-      )
-      .finally(() => setLoadingDevices(false));
+    void loadDevices();
   }, []);
+
+  async function loadDevices() {
+    setLoadingDevices(true);
+    try {
+      setDevices(await getDevices());
+    } catch (requestError) {
+      setSubmitError(requestError instanceof Error ? requestError.message : "Unable to load devices.");
+    } finally {
+      setLoadingDevices(false);
+    }
+  }
+
+  async function handleRefresh() {
+    setRefreshingDevices(true);
+    setSubmitError(null);
+    try {
+      await refreshDevices();
+      await loadDevices();
+    } catch (requestError) {
+      setSubmitError(requestError instanceof Error ? requestError.message : "Unable to rescan devices.");
+    } finally {
+      setRefreshingDevices(false);
+    }
+  }
 
   useEffect(() => {
     if (!deviceId) {
@@ -105,11 +125,22 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
       {step === 0 && (
         <DataCard>
           <p className="mb-3 text-[15px] font-medium text-ink">Select device</p>
+          <div className="mb-3 flex justify-end">
+            <Button variant="secondary" onClick={handleRefresh} disabled={refreshingDevices || loadingDevices}>
+              {refreshingDevices ? "Rescanning..." : "Rescan"}
+            </Button>
+          </div>
           <div className="flex flex-col gap-2">
             {loadingDevices && <p className="text-sm text-body-muted">Loading devices...</p>}
+            {!loadingDevices && !devices.length && !submitError && (
+              <p className="text-sm text-body-muted">No removable or fixed storage devices detected - check connections and try Rescan.</p>
+            )}
+            {!loadingDevices && submitError && <p className="text-sm text-destructive-active">{submitError}</p>}
             {devices.map((d) => (
               <button
                 key={d.id}
+                type="button"
+                disabled={Boolean(d.mounted || d.isSystemDisk)}
                 onClick={() => setDeviceId(d.id)}
                 className={
                   "rounded border px-4 py-3 text-left transition-colors " +
@@ -127,6 +158,11 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
                   </span>
                 </div>
                 <MonoText className="mt-1">{d.path}</MonoText>
+                <div className="mt-2 flex gap-1.5">
+                  <StatusBadge label={d.type} tone="neutral" />
+                  {d.mounted && <StatusBadge label="Mounted" tone="warning" />}
+                  {d.isSystemDisk && <StatusBadge label="System disk" tone="destructive" />}
+                </div>
               </button>
             ))}
           </div>

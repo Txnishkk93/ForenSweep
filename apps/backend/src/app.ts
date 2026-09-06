@@ -31,6 +31,7 @@ import {
   certificateRoutes,
   internalCertificateRoutes,
 } from "./modules/certificates/certificate.routes.js";
+import { acquisitionRoutes } from "./modules/acquisitions/acquisition.routes.js";
 
 export function createApp(
   options: {
@@ -52,6 +53,21 @@ export function createApp(
     }),
   );
   app.use(express.json({ limit: "1mb" }));
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on("finish", () =>
+      logInfo("request", {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        durationMs: Date.now() - startedAt,
+        requestId: req.requestId,
+        userId: req.auth?.userId ?? "unauthenticated",
+        role: req.auth?.role ?? "unauthenticated",
+      }),
+    );
+    next();
+  });
   app.use(
     "/api/devices",
     options.deviceStore
@@ -70,19 +86,6 @@ export function createApp(
       ? createJobRoutes(options.jobStore, options.jobQueue)
       : jobRoutes,
   );
-  app.use((req, res, next) => {
-    const startedAt = Date.now();
-    res.on("finish", () =>
-      logInfo("request", {
-        method: req.method,
-        path: req.path,
-        status: res.statusCode,
-        durationMs: Date.now() - startedAt,
-        requestId: req.requestId,
-      }),
-    );
-    next();
-  });
   app.get("/health", (req, res) =>
     res.json({
       success: true,
@@ -110,6 +113,7 @@ export function createApp(
   app.use("/internal", internalRecoveryRoutes);
   app.use("/api", certificateRoutes);
   app.use("/api", recoveryRoutes);
+  app.use("/api/acquisitions", acquisitionRoutes);
   app.use("/internal", internalRoutes);
   app.use(notFound);
   app.use(errorHandler);

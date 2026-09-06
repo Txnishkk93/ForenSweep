@@ -54,6 +54,11 @@ export function requireRole(
           403,
           "FORBIDDEN",
           "You do not have permission to access this resource",
+          {
+            authorizationCheck: req.auth
+              ? `role ${req.auth.role} not in required [${allowedRoles.join(", ")}]`
+              : "no valid authentication context",
+          },
         ),
       );
       return;
