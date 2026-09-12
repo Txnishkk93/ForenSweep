@@ -16,6 +16,9 @@ type Discovery = {
   supportsAta: boolean;
   supportsNvme: boolean;
   supportsSed: boolean;
+  supportsCryptoErase: boolean;
+  supportsSecureErase: boolean;
+  respondsToCommands: boolean;
   mounted: boolean;
   isSystemDisk: boolean;
   capabilitySnapshot: Record<string, unknown>;
@@ -66,6 +69,10 @@ function validateDiscovery(device: Discovery): Discovery {
     supportsAta: device.supportsAta,
     supportsNvme: device.supportsNvme,
     supportsSed: device.supportsSed,
+    supportsCryptoErase: device.supportsCryptoErase,
+    supportsSecureErase: device.supportsSecureErase,
+    isSsd: device.type === "SSD",
+    respondsToCommands: device.respondsToCommands,
     lastSeenAt: new Date().toISOString(),
   });
   if (!result.success) throw new Error(`Malformed device profile for ${device.path}`);
@@ -150,6 +157,12 @@ export async function scanLinux(): Promise<Discovery[]> {
     const smart = await probeJson("smartctl", ["-i", path]);
     const nvme = transport === "nvme" ? await probeJson("nvme", ["id-ctrl", path]) : {};
     const smartText = JSON.stringify(smart).toUpperCase();
+    const nvmeText = JSON.stringify(nvme).toUpperCase();
+    const supportsCryptoErase = smartText.includes("OPAL") || smartText.includes('"SED":TRUE');
+    const supportsSecureErase =
+      smartText.includes("SECURITY ERASE") ||
+      smartText.includes('"SECURITY_SUPPORTED":TRUE') ||
+      (transport === "nvme" && (nvmeText.includes("SANICAP") || nvmeText.includes("SANITIZE")));
     devices.push(validateDiscovery({
       path,
       type: linuxType(node),
@@ -158,7 +171,10 @@ export async function scanLinux(): Promise<Discovery[]> {
       sizeBytes: sizeOf(node.size),
       supportsAta: transport === "ata" || transport === "sata" || smartText.includes("ATA_VERSION"),
       supportsNvme: transport === "nvme" && Object.keys(nvme).length > 0,
-      supportsSed: smartText.includes("OPAL") || smartText.includes('"SED":TRUE'),
+      supportsSed: supportsCryptoErase,
+      supportsCryptoErase,
+      supportsSecureErase,
+      respondsToCommands: Object.keys(smart).length > 0 || Object.keys(nvme).length > 0 || Boolean(node.model),
       mounted: mounts(node).length > 0,
       isSystemDisk: linuxSystemDisk(node, root),
       capabilitySnapshot: {
@@ -168,6 +184,9 @@ export async function scanLinux(): Promise<Discovery[]> {
         rotational: node.rota === true || node.rota === 1 ? true : node.rota === false || node.rota === 0 ? false : null,
         smartctl: smart,
         nvme,
+        supportsCryptoErase,
+        supportsSecureErase,
+        respondsToCommands: Object.keys(smart).length > 0 || Object.keys(nvme).length > 0 || Boolean(node.model),
         rootSource: root,
       },
     }));
@@ -210,6 +229,9 @@ export function normalizeMacDevice(info: Record<string, unknown>, bootIdentifier
     supportsAta: protocol === "SATA",
     supportsNvme: protocol.includes("PCI-EXPRESS") && /NVME/i.test(`${info.Protocol ?? ""} ${model ?? ""}`),
     supportsSed: false,
+    supportsCryptoErase: false,
+    supportsSecureErase: false,
+    respondsToCommands: true,
     mounted: Boolean(mountPoint),
     isSystemDisk,
     capabilitySnapshot: { transport: protocol.toLowerCase() || "unknown", removable, solidState, diskutil: info },
@@ -275,6 +297,9 @@ export function normalizeWindowsDevices(
       supportsAta: bus === "SATA" && media === "SSD",
       supportsNvme: bus === "NVME",
       supportsSed: false,
+      supportsCryptoErase: false,
+      supportsSecureErase: false,
+      respondsToCommands: psBool(disk?.OperationalStatus) || String(disk?.OperationalStatus ?? "").toLowerCase() === "online",
       mounted,
       isSystemDisk: psBool(disk?.IsBoot) || psBool(disk?.IsSystem),
       capabilitySnapshot: { transport: bus.toLowerCase() || "unknown", removable: bus === "USB", mediaType: media, operationalStatus: disk?.OperationalStatus ?? null, partitionStyle: disk?.PartitionStyle ?? null },

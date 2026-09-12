@@ -7,6 +7,7 @@ export type JobType = "ERASE" | "RECOVER";
 export type JobStatus = "QUEUED" | "RUNNING" | "VERIFYING" | "COMPLETED" | "FAILED" | "CANCELLED";
 export type DeviceType = "HDD" | "SSD" | "USB" | "SD_CARD" | "UNKNOWN";
 export type EraseMethod =
+  | "DESTROY"
   | "OVERWRITE_SINGLE"
   | "OVERWRITE_MULTI"
   | "ATA_SECURE_ERASE"
@@ -30,6 +31,10 @@ export interface Device {
   supportsAta: boolean;
   supportsNvme: boolean;
   supportsSed: boolean;
+  supportsCryptoErase: boolean;
+  supportsSecureErase: boolean;
+  isSsd: boolean;
+  respondsToCommands: boolean;
 }
 
 export interface DeviceFsEntry {
@@ -70,6 +75,7 @@ export interface AvailableImage {
 
 export interface SanitizationPlan {
   method: EraseMethod;
+  sanitizationTier?: "CRYPTOGRAPHIC_ERASE" | "FIRMWARE_SECURE_ERASE" | "OVERWRITE" | null;
   nistCategory: NistCategory;
   justification: string;
   limitations: string | null;
@@ -129,6 +135,7 @@ export interface Certificate {
   id: string;
   jobId: string;
   method: EraseMethod;
+  sanitizationTier?: "CRYPTOGRAPHIC_ERASE" | "FIRMWARE_SECURE_ERASE" | "OVERWRITE" | null;
   standard: string;
   verificationResult: boolean;
   targetDisplayName?: string;

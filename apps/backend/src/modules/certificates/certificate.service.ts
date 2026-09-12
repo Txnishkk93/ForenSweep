@@ -26,6 +26,7 @@ type CertificateRecord = NonNullable<
   Awaited<ReturnType<typeof prisma.certificate.findUnique>>
 >;
 type CertificateWithDisplayData = CertificateRecord & {
+  sanitizationTier: string | null;
   targetDisplayName: string;
   targetPaths: string[];
   targetDeviceId: string | null;
@@ -62,7 +63,13 @@ function certificateDisplayData(
           : `${names.length} selected items`
         : job?.device?.model || (job?.type === "RECOVER" ? "Recovered files" : "Managed device");
   const { job: _job, ...certificateData } = certificate;
-  return { ...certificateData, targetDisplayName, targetPaths, targetDeviceId: job?.device?.id ?? null };
+  return {
+    ...certificateData,
+    sanitizationTier: typeof payload.sanitizationTier === "string" ? payload.sanitizationTier : null,
+    targetDisplayName,
+    targetPaths,
+    targetDeviceId: job?.device?.id ?? null,
+  };
 }
 
 export async function persistCertificate(

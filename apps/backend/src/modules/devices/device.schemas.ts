@@ -8,6 +8,7 @@ export const erasePreviewSchema = z
     eraseScope: z.enum(["WHOLE_DRIVE", "SPECIFIC_FILES"]),
     requestedMethod: z
       .enum([
+        "DESTROY",
         "OVERWRITE_SINGLE",
         "OVERWRITE_MULTI",
         "ATA_SECURE_ERASE",

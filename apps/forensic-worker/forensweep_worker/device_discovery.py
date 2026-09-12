@@ -30,6 +30,9 @@ class DeviceProfile:
     supports_ata: bool
     supports_nvme: bool
     supports_sed: bool
+    supports_crypto_erase: bool
+    supports_secure_erase: bool
+    responds_to_commands: bool
     capability_evidence: dict[str, Any]
 
     def as_payload(self) -> dict[str, Any]:
@@ -178,6 +181,13 @@ def _profile(node: dict[str, Any]) -> DeviceProfile | None:
         "udevOpal": udev.get("ID_ATA_OPAL") == "1",
         "smartctlExplicitSed": smart.get("sed") is True,
     }
+    supports_crypto_erase = bool(sed_evidence["udevOpal"] or sed_evidence["smartctlExplicitSed"])
+    supports_secure_erase = bool(
+        smart.get("security_supported") is True
+        or smart.get("ata_security")
+        or (nvme.get("sanicap") not in (None, 0, "0"))
+    )
+    responds_to_commands = bool(smart or nvme or udev)
     ssd_identity = (
         transport in {"sata", "nvme"}
         or udev.get("ID_NVME") == "1"
@@ -195,7 +205,10 @@ def _profile(node: dict[str, Any]) -> DeviceProfile | None:
         transport=transport or "unknown",
         supports_ata=bool(ata_evidence["udevIdAta"] or smart.get("ata_version")),
         supports_nvme=bool(nvme_evidence["udevIdNvme"] or nvme),
-        supports_sed=bool(sed_evidence["udevOpal"] or sed_evidence["smartctlExplicitSed"]),
+        supports_sed=supports_crypto_erase,
+        supports_crypto_erase=supports_crypto_erase,
+        supports_secure_erase=supports_secure_erase,
+        responds_to_commands=responds_to_commands,
         capability_evidence={
             "udev": udev,
             "smartctl": smart,
@@ -206,6 +219,9 @@ def _profile(node: dict[str, Any]) -> DeviceProfile | None:
             "rotational": rotational,
             "ssd": transport in {"sata", "nvme"} or rotational is False,
             "ssdIdentity": ssd_identity,
+            "supportsCryptoErase": supports_crypto_erase,
+            "supportsSecureErase": supports_secure_erase,
+            "respondsToCommands": responds_to_commands,
             "probesAreReadOnly": True,
         },
     )

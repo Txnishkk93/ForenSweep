@@ -38,6 +38,10 @@ function getDeviceProfile(device: DeviceRecord) {
     supportsAta: device.supportsAta,
     supportsNvme: device.supportsNvme,
     supportsSed: device.supportsSed,
+    supportsCryptoErase: device.supportsCryptoErase ?? device.supportsSed,
+    supportsSecureErase: device.supportsSecureErase ?? (device.supportsAta || device.supportsNvme),
+    isSsd: device.type === "SSD",
+    respondsToCommands: device.respondsToCommands ?? true,
     lastSeenAt: device.lastSeenAt.toISOString(),
   };
 }
@@ -128,17 +132,20 @@ export async function createEraseJob(
       })
     : {
         recommendedMethod: "FILE_LEVEL_OVERWRITE" as const,
+      sanitizationTier: "OVERWRITE" as const,
         riskLevel: "HIGH" as const,
         warnings: ["File-level overwrites cannot guarantee physical-cell erasure on SSD media."],
       };
   if (
-    input.requestedMethod &&
-    input.requestedMethod !== policy.recommendedMethod
+    policy.recommendedMethod === "DESTROY" &&
+    (input.requestedMethod === undefined ||
+      input.requestedMethod === "DESTROY" ||
+      !(device?.respondsToCommands ?? true))
   ) {
     throw new AppError(
       409,
       "UNSAFE_REQUESTED_METHOD",
-      "Requested erase method is not safe for this device",
+      "The device cannot be sanitized in place; physical destruction is required",
     );
   }
   if (!(device ? confirmationValues(device) : ["ERASE"]).includes(input.typeToConfirm)) {
@@ -160,6 +167,8 @@ export async function createEraseJob(
       progressDetail: {
         requestedMethod: input.requestedMethod ?? null,
         recommendedMethod: policy.recommendedMethod,
+        sanitizationTier: policy.sanitizationTier,
+        selectedMethod: input.requestedMethod ?? policy.recommendedMethod,
         ...(localFileJob ? { erasePaths: resolvedFileList } : {}),
         ...(hardwareJob && device
           ? {
@@ -184,7 +193,7 @@ export async function createEraseJob(
       deviceId: device?.id,
       userId,
       approvalStatus: requiresApproval ? "PENDING" : "NOT_REQUIRED",
-      eraseMethod: policy.recommendedMethod,
+      eraseMethod: input.requestedMethod ?? policy.recommendedMethod,
       eraseScope: input.eraseScope,
       eraseFileList: resolvedFileList ?? Prisma.JsonNull,
       standard: input.standard ?? "NIST_800_88",
@@ -201,6 +210,8 @@ export async function createEraseJob(
       deviceId: device?.id ?? null,
       eraseScope: input.eraseScope,
       eraseMethod: policy.recommendedMethod,
+      selectedMethod: input.requestedMethod ?? policy.recommendedMethod,
+      sanitizationTier: policy.sanitizationTier,
       ...(localFileJob ? { paths: resolvedFileList } : {}),
     },
   });

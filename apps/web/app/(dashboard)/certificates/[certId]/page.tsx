@@ -115,6 +115,15 @@ export default function CertificateDetailPage({
             <p className="mt-1 text-ink">{cert.standard}</p>
           </div>
           <div>
+            <p className="text-body-muted">Sanitization tier</p>
+            <p className="mt-1 text-ink">{cert.sanitizationTier ?? "Not achieved"}</p>
+          </div>
+          {Array.isArray(cert.canonicalPayload?.limitations) && cert.canonicalPayload.limitations.length > 0 && (
+            <div className="col-span-2 rounded border border-warning/30 bg-warning-soft p-3 text-[13px] text-warning">
+              {(cert.canonicalPayload.limitations as unknown[]).filter((item): item is string => typeof item === "string").join(" ")}
+            </div>
+          )}
+          <div>
             <p className="text-body-muted">Content hash</p>
             <MonoText className="mt-1 block w-fit">{cert.contentHash}</MonoText>
           </div>

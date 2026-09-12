@@ -28,9 +28,18 @@ export const deviceProfileSchema = z.object({
   supportsAta: z.boolean(),
   supportsNvme: z.boolean(),
   supportsSed: z.boolean(),
+  supportsCryptoErase: z.boolean(),
+  supportsSecureErase: z.boolean(),
+  isSsd: z.boolean(),
+  respondsToCommands: z.boolean(),
   lastSeenAt: z.iso.datetime(),
 });
 
 export const deviceIdSchema = z.object({ id: z.uuid() });
 
 export type DeviceProfile = z.infer<typeof deviceProfileSchema>;
+
+export type DeviceCapabilities = Pick<
+  DeviceProfile,
+  "supportsCryptoErase" | "supportsSecureErase" | "isSsd" | "respondsToCommands"
+>;

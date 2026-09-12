@@ -60,6 +60,16 @@ def _method_label(method: str) -> str:
     return labels.get(method, method.replace("_", " "))
 
 
+def _sanitization_tier(method: str, scope: str) -> str | None:
+    if method == "CRYPTO_ERASE":
+        return "CRYPTOGRAPHIC_ERASE"
+    if method in {"ATA_SECURE_ERASE", "NVME_SECURE_FORMAT"}:
+        return "FIRMWARE_SECURE_ERASE"
+    if method in {"OVERWRITE_SINGLE", "OVERWRITE_MULTI", "FILE_LEVEL_OVERWRITE"}:
+        return "OVERWRITE"
+    return None
+
+
 def _target_metadata(job: dict[str, Any], device: dict[str, Any]) -> tuple[str, list[str], str]:
     scope = str(job.get("eraseScope") or "WHOLE_DRIVE")
     raw_paths = job.get("eraseFileList") if scope == "SPECIFIC_FILES" else None
@@ -135,7 +145,9 @@ def _write_professional_pdf(
     target_name = str(payload.get("targetDisplayName") or device.get("model") or "Certificate target")
     target_paths = [str(item) for item in payload.get("targetPaths") or []]
     title = "Certificate of Data Recovery" if payload.get("jobType") == "RECOVER" else "Certificate of Secure Erasure"
-    method = _method_label(str(payload.get("method") or "UNKNOWN"))
+    method_value = str(payload.get("method") or "UNKNOWN")
+    method = _method_label(method_value)
+    tier = str(payload.get("sanitizationTier") or "Not achieved")
     standard = str(payload.get("standard") or "NIST_800_88").replace("_", " ")
     location = str(device.get("path") or "")
 
@@ -170,7 +182,7 @@ def _write_professional_pdf(
     status = Table([[paragraph(status_text, status_style)]], colWidths=[6.35 * inch])
     status.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), status_color), ("BOX", (0, 0), (-1, -1), 0.5, status_color), ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12), ("TOPPADDING", (0, 0), (-1, -1), 9), ("BOTTOMPADDING", (0, 0), (-1, -1), 9), ("TEXTCOLOR", (0, 0), (-1, -1), success if verified else failure)]))
     story.extend([status, Spacer(1, 14), paragraph("Method and standard", section_style)])
-    details = Table([[paragraph("METHOD", label_style), paragraph("STANDARD", label_style)], [paragraph(method, value_style), paragraph(standard, value_style)]], colWidths=[3.15 * inch, 3.2 * inch])
+    details = Table([[paragraph("METHOD", label_style), paragraph("SANITIZATION TIER", label_style)], [paragraph(method, value_style), paragraph(tier, value_style)], [paragraph("STANDARD", label_style), paragraph("VERIFICATION", label_style)], [paragraph(standard, value_style), paragraph(str((payload.get("verificationDetail") or {}).get("verificationMethod") or "Recorded verification"), value_style)]], colWidths=[3.15 * inch, 3.2 * inch])
     details.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 16), ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
     story.extend([details, Spacer(1, 12), paragraph("For verification purposes", section_style)])
     previous = previous_certificate_hash or "GENESIS"
@@ -390,6 +402,7 @@ def create_certificate(context: dict[str, Any], verification: dict[str, Any], co
         "jobType": job.get("type") or "ERASE",
         "deviceSnapshot": device,
         "method": job.get("eraseMethod") or "UNKNOWN",
+        "sanitizationTier": _sanitization_tier(str(job.get("eraseMethod") or "UNKNOWN"), str(job.get("eraseScope") or "WHOLE_DRIVE")),
         "standard": job.get("standard") or "NIST_800_88",
         "operatorReference": job.get("userId") or "unknown",
         "approvalReference": job.get("approvedById"),
@@ -406,6 +419,11 @@ def create_certificate(context: dict[str, Any], verification: dict[str, Any], co
         "warnings": [],
         "limitations": ["Verification applies to the test image and sampled regions, not an absolute physical-media claim."],
     }
+    method = str(payload["method"])
+    if method == "CRYPTO_ERASE":
+        payload["limitations"] = ["Verification confirms key destruction or rotation; ciphertext remains physically present by design."]
+    if payload["scope"] == "SPECIFIC_FILES" and str(device.get("type")) == "SSD":
+        payload["limitations"].append("File-level overwrite on SSD media cannot guarantee physical erasure of the exact cells because of wear leveling. For guaranteed sanitization, use whole-device Crypto Erase or Secure Erase.")
     digest = content_hash(payload)
     signature = load_private_key(config.cert_private_key_path).sign(digest.encode("utf-8"))
     pdf_path = config.output_root / "certificates" / f"{payload['certificateNumber']}.pdf"

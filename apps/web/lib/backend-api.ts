@@ -16,6 +16,7 @@ import type {
 type DeviceProfileResponse = Device & {
   recommendedMethod?: EraseMethod;
   sanitizationLabel?: string;
+  sanitizationTier?: "CRYPTOGRAPHIC_ERASE" | "FIRMWARE_SECURE_ERASE" | "OVERWRITE" | null;
   warnings?: string[];
   riskLevel?: "LOW" | "MEDIUM" | "HIGH";
   requiresApproval?: boolean;
@@ -96,13 +97,15 @@ export function profileToPlan(profile: DeviceProfileResponse): SanitizationPlan 
     "CRYPTO_ERASE",
   ];
   return {
-    method: profile.recommendedMethod ?? "OVERWRITE_MULTI",
-    nistCategory: purgeMethods.includes(profile.recommendedMethod ?? "OVERWRITE_MULTI")
-      ? "PURGE"
-      : "CLEAR",
+    method: profile.recommendedMethod ?? "DESTROY",
+    nistCategory: profile.recommendedMethod === "DESTROY"
+      ? "DESTROY"
+      : purgeMethods.includes(profile.recommendedMethod ?? "DESTROY")
+        ? "PURGE"
+        : "CLEAR",
     justification:
       profile.sanitizationLabel ??
-      "The backend selected the safest available sanitization method for this device.",
+      "The backend selected the strongest available sanitization method for this device.",
     limitations: profile.warnings?.join(" ") || null,
   };
 }
