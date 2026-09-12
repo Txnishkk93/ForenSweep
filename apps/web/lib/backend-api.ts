@@ -143,7 +143,10 @@ export async function getJob(jobId: string): Promise<Job> {
 }
 
 export async function approveJob(jobId: string): Promise<Job> {
-  return apiFetch<Job>(`/api/jobs/${jobId}/approve`, { method: "POST" });
+  return apiFetch<Job>(`/api/jobs/${jobId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 export async function createEraseJob(input: {
