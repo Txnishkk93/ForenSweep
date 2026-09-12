@@ -214,6 +214,10 @@ export async function downloadCertificate(certificateId: string): Promise<Blob> 
   return apiFetchBlob(`/api/certificates/${certificateId}/download`);
 }
 
+export async function downloadCertificateExport(certificateId: string): Promise<Blob> {
+  return apiFetchBlob(`/api/certificates/${certificateId}/export`);
+}
+
 export async function verifyCertificate(certificate: Certificate): Promise<{ valid: boolean }> {
   const payload = (certificate as Certificate & { canonicalPayload?: unknown }).canonicalPayload;
   if (!payload) throw new Error("This certificate does not contain a verifiable payload.");

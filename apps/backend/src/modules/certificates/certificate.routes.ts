@@ -136,6 +136,23 @@ certificateRoutes.get(
     );
   }),
 );
+certificateRoutes.get(
+  "/certificates/:id/export",
+  validateParams(idSchema),
+  asyncHandler(async (req, res) => {
+    const certificate = await getCertificateForDownload(String(req.params.id));
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="forensweep-certificate-${certificate.id}.json"`,
+    );
+    res.json({
+      payload: certificate.canonicalPayload,
+      contentHash: certificate.contentHash,
+      signature: certificate.signature,
+    });
+  }),
+);
 certificateRoutes.post(
   "/certificates/verify",
   requireRole("ADMIN", "OPERATOR", "INVESTIGATOR"),

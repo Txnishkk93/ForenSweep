@@ -103,7 +103,7 @@ export default function NewRecoveryPage() {
           const info = metadata.info as Record<string, unknown>;
           const subject = typeof info.Subject === "string" ? info.Subject : "";
           const encoded = subject.startsWith("ForenSweep-Certificate:") ? subject.slice("ForenSweep-Certificate:".length) : "";
-          if (!encoded) throw new Error("No certificate export was found in this PDF.");
+          if (!encoded) throw new Error("This PDF does not contain an embedded certificate export. Download the JSON export from the certificate detail page and upload that file instead.");
           parsed = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0)))) as typeof parsed;
         }
       } else {
@@ -274,10 +274,15 @@ export default function NewRecoveryPage() {
         <select
           value={authorizationCertificateId}
           onChange={(event) => {
-            setAuthorizationCertificateId(event.target.value);
+            const certificateId = event.target.value;
+            setAuthorizationCertificateId(certificateId);
             setUploadedCertificate(undefined);
             setCertificateUploadState("idle");
-            setCertificateUploadMessage(null);
+            setCertificateUploadMessage(
+              certificateId
+                ? "Certificate selected. Choose a recovery source to verify it against this target."
+                : null,
+            );
           }}
           className="w-full rounded border border-hairline-strong bg-surface-card px-3 py-2 text-sm text-ink"
         >
