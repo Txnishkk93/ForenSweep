@@ -38,7 +38,7 @@ export default function CertificatesPage() {
                     className="text-[13px] text-primary hover:underline"
                   >
                     <span className="block truncate font-medium text-ink">
-                      {c.targetDisplayName ?? "Certificate target"}
+                      {c.targetDisplayName ?? `Certificate from ${new Date(c.createdAt).toLocaleDateString()}`}
                     </span>
                     <span className="mt-0.5 block font-mono text-[11px] text-body-muted">
                       {c.id}

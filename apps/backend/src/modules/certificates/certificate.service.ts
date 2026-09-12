@@ -12,12 +12,55 @@ import type {
   verifyCertificateSchema,
 } from "./certificate.schemas.js";
 import { cacheKeys, getCachedOrFetch } from "../../lib/cache.js";
+import path from "node:path";
 
 export type CertificateStore = Pick<
   typeof prisma,
   "certificate" | "job" | "auditLog"
 >;
 type CertificateInput = z.infer<typeof internalCertificateSchema>;
+
+type CertificateRecord = NonNullable<
+  Awaited<ReturnType<typeof prisma.certificate.findUnique>>
+>;
+type CertificateWithDisplayData = CertificateRecord & {
+  targetDisplayName: string;
+  targetPaths: string[];
+};
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
+}
+
+function certificateDisplayData(
+  certificate: CertificateRecord & { job?: unknown },
+  job: {
+    type: string;
+    eraseScope: string | null;
+    eraseFileList: unknown;
+    device: { model: string | null; path: string } | null;
+  } | null,
+): CertificateWithDisplayData {
+  const payload = (certificate.canonicalPayload ?? {}) as Record<string, unknown>;
+  const payloadPaths = stringArray(payload.targetPaths);
+  const jobPaths = stringArray(job?.eraseFileList);
+  const targetPaths = payloadPaths.length > 0 ? payloadPaths : jobPaths;
+  const names = targetPaths.map((target) => path.basename(target.replaceAll("\\", "/")) || target);
+  const payloadName = typeof payload.targetDisplayName === "string" ? payload.targetDisplayName : "";
+  const targetDisplayName = payloadName.length > 0 && payloadName !== "Selected files and folders"
+    ? payloadName
+    : names.length === 1
+      ? (names[0] ?? "Selected item")
+      : names.length > 1
+        ? names.length <= 3
+          ? names.join(" + ")
+          : `${names.length} selected items`
+        : job?.device?.model || (job?.type === "RECOVER" ? "Recovered files" : "Managed device");
+  const { job: _job, ...certificateData } = certificate;
+  return { ...certificateData, targetDisplayName, targetPaths };
+}
 
 export async function persistCertificate(
   input: CertificateInput,
@@ -86,10 +129,13 @@ export async function getCertificateForUser(
   isAdmin: boolean,
   store: CertificateStore = prisma,
 ) {
-  const certificate = await store.certificate.findUnique({ where: { id } });
+  const certificate = await store.certificate.findUnique({
+    where: { id },
+    include: { job: { include: { device: true } } },
+  });
   if (!certificate)
     throw new AppError(404, "CERTIFICATE_NOT_FOUND", "Certificate not found");
-  const job = await store.job.findUnique({ where: { id: certificate.jobId } });
+  const job = certificate.job;
   if (!job || (!isAdmin && job.userId !== userId))
     throw new AppError(
       403,
@@ -102,17 +148,20 @@ export async function getCertificateForUser(
     action: "CERTIFICATE_VIEWED",
     detail: { certificateId: certificate.id },
   });
-  return certificate;
+  return certificateDisplayData(certificate, job);
 }
 
 export async function getCertificateForDownload(
   id: string,
   store: CertificateStore = prisma,
 ) {
-  const certificate = await store.certificate.findUnique({ where: { id } });
+  const certificate = await store.certificate.findUnique({
+    where: { id },
+    include: { job: { include: { device: true } } },
+  });
   if (!certificate)
     throw new AppError(404, "CERTIFICATE_NOT_FOUND", "Certificate not found");
-  return certificate;
+  return certificateDisplayData(certificate, certificate.job);
 }
 
 export async function listCertificates(
@@ -124,12 +173,18 @@ export async function listCertificates(
 ) {
   const safePage = Math.max(1, Math.floor(page));
   const safeSize = Math.min(50, Math.max(1, Math.floor(pageSize)));
-  const read = () => store.certificate.findMany({
-    where: isAdmin ? undefined : { job: { userId } },
-    orderBy: { createdAt: "desc" },
-    take: safeSize,
-    skip: (safePage - 1) * safeSize,
-  });
+  const read = async () => {
+    const certificates = await store.certificate.findMany({
+      where: isAdmin ? undefined : { job: { userId } },
+      orderBy: { createdAt: "desc" },
+      take: safeSize,
+      skip: (safePage - 1) * safeSize,
+      include: { job: { include: { device: true } } },
+    });
+    return certificates.map((certificate) =>
+      certificateDisplayData(certificate, certificate.job),
+    );
+  };
   return store === prisma
     ? getCachedOrFetch(cacheKeys.certificates(userId, safePage, safeSize), 12, read)
     : read();

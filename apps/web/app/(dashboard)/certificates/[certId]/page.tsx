@@ -84,7 +84,10 @@ export default function CertificateDetailPage({
 
   return (
     <div className="max-w-2xl">
-      <SectionHeading eyebrow="Certificate" title={cert.targetDisplayName ?? "Certificate target"} />
+      <SectionHeading
+        eyebrow="Certificate"
+        title={cert.targetDisplayName ?? `Certificate from ${new Date(cert.createdAt).toLocaleDateString()}`}
+      />
       {error && <p className="mb-6 text-sm text-destructive-active">{error}</p>}
 
       <DataCard className="mb-6">

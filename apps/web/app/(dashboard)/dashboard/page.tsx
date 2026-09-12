@@ -413,7 +413,7 @@ export default function DashboardPage() {
                           >
                             <div className="min-w-0">
                               <p className="truncate text-[12.5px] font-semibold tracking-[-0.01em] text-ink">
-                                {cert.targetDisplayName ?? "Certificate target"}
+                                {cert.targetDisplayName ?? `Certificate from ${new Date(cert.createdAt).toLocaleDateString()}`}
                               </p>
                               <p className="mt-0.5 font-mono text-[11px] text-body-muted">
                                 {cert.id}
