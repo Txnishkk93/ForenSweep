@@ -100,15 +100,7 @@ export default function LoginPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="flex items-center bg-[#1D1D1D] px-10 py-3.5 text-xs font-medium text-white">
-        <div className="flex items-center gap-2">
-          <div className="flex h-4 w-4 items-center justify-center rounded-[3px] bg-white">
-            <div className="h-1.5 w-1.5 rounded-[1px] bg-black" />
-          </div>
-          <span>ForenSweep</span>
-        </div>
-      </footer>
+      
 
     </div>
   );

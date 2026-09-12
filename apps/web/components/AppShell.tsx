@@ -17,9 +17,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <div className="flex min-h-screen">
-        <aside className="w-60 shrink-0 border-r border-hairline bg-surface-card px-4 py-6">
+    <div className="h-screen overflow-hidden bg-canvas">
+      <div className="flex h-full min-h-0">
+        <aside className="h-full w-60 shrink-0 border-r border-hairline bg-surface-card px-4 py-6">
           <div className="mb-8 px-2">
             <p className="text-[18px] font-medium tracking-tighter text-ink">
               ForenSweep
@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
         </aside>
-        <main className="min-w-0 flex-1 px-8 py-8">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-8 py-8">{children}</main>
       </div>
     </div>
   );
