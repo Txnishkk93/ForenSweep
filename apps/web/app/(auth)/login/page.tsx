@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/Button";
+import { DecorativeFloaters } from "@/components/DecorativeFloaters";
 import { login } from "@/lib/api";
 import { setSession } from "@/lib/auth";
 
@@ -33,57 +35,81 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 py-8">
-      <div className="w-full max-w-sm rounded-card border border-hairline bg-surface-card p-8">
-        <p className="text-[22px] font-medium tracking-tighter text-ink">
-          ForenSweep
-        </p>
-        <p className="mt-1 mb-6 text-sm text-body-muted">
-          Sign in to access erasure, recovery, and audit tools.
-        </p>
+    <div className="relative flex min-h-screen flex-col bg-white font-sans text-neutral-900">
+      {/* Top Header Logo */}
+      <header className="flex items-center gap-2.5 px-10 py-8">
+        <div className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-black">
+          <div className="h-2.5 w-2.5 rounded-[2px] border-2 border-white" />
+        </div>
+        <span className="text-xl font-bold tracking-tight text-black">ForenSweep</span>
+      </header>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-ink">
-              Username or email
-            </span>
-            <input
-              type="text"
-              required
-              value={identifier}
-              onChange={(event) => setIdentifier(event.target.value)}
-              className="rounded border border-hairline-strong bg-surface-card px-3 py-2 text-sm text-ink outline-none focus:border-primary"
-              autoComplete="username"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-ink">Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="rounded border border-hairline-strong bg-surface-card px-3 py-2 text-sm text-ink outline-none focus:border-primary"
-              autoComplete="current-password"
-            />
-          </label>
+      {/* Main Container */}
+      <main className="relative flex flex-1 items-center px-20 pb-16">
+        <DecorativeFloaters />
 
-          {error && <p className="text-[13px] text-destructive-active">{error}</p>}
+        <div className="z-10 w-full max-w-[340px] pl-2">
+          <p className="text-sm text-neutral-500">
+            Sign in to access erasure, recovery, and audit tools.
+          </p>
 
-          <Button type="submit" disabled={loading} className="mt-2 w-full">
-            {loading ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
+          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-neutral-600">
+                Username or email
+              </label>
+              <input
+                type="text"
+                required
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                className="w-full rounded-md border border-neutral-200 px-3.5 py-2.5 text-sm text-neutral-800 placeholder-neutral-400 outline-none transition focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400"
+                autoComplete="username"
+              />
+            </div>
 
-        <p className="mt-6 border-t border-hairline pt-5 text-center text-[13px] text-body-muted">
-          Need an account?{" "}
-          <Link
-            href="/signup"
-            className="font-medium text-primary hover:text-primary-active"
-          >
-            Create one
-          </Link>
-        </p>
-      </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-neutral-600">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-md border border-neutral-200 px-3.5 py-2.5 text-sm text-neutral-800 outline-none transition focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400"
+                autoComplete="current-password"
+              />
+            </div>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            <Button
+              type="submit"
+              variant="dark"
+              disabled={loading}
+              className="mt-1 w-full rounded-md py-2.5 text-sm font-medium transition"
+            >
+              {loading ? "Signing in..." : "Sign in"}
+            </Button>
+          </form>
+
+          <p className="mt-6 border-t border-neutral-100 pt-5 text-center text-xs text-neutral-500">
+            Need an account?{" "}
+            <Link href="/signup" className="font-medium text-sky-500 hover:underline">
+              Create one
+            </Link>
+          </p>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="flex items-center bg-[#1D1D1D] px-10 py-3.5 text-xs font-medium text-white">
+        <div className="flex items-center gap-2">
+          <div className="flex h-4 w-4 items-center justify-center rounded-[3px] bg-white">
+            <div className="h-1.5 w-1.5 rounded-[1px] bg-black" />
+          </div>
+          <span>ForenSweep</span>
+        </div>
+      </footer>
+
     </div>
   );
 }

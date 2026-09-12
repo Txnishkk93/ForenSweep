@@ -7,6 +7,7 @@ forensweep_worker/config.py
 forensweep_worker/device_discovery.py
 forensweep_worker/main.py
 forensweep_worker/models.py
+forensweep_worker/upload_zip.py
 forensweep_worker.egg-info/PKG-INFO
 forensweep_worker.egg-info/SOURCES.txt
 forensweep_worker.egg-info/dependency_links.txt
