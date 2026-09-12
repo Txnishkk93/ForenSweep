@@ -32,6 +32,20 @@ export interface Device {
   supportsSed: boolean;
 }
 
+export interface DeviceFsEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  sizeBytes: string | null;
+  modifiedAt: string | null;
+}
+
+export interface DeviceBrowseResponse {
+  currentPath: string;
+  parentPath: string | null;
+  entries: DeviceFsEntry[];
+}
+
 export interface AvailableImage {
   id: string;
   filename: string;

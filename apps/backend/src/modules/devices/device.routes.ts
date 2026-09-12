@@ -18,6 +18,11 @@ export function createDeviceRoutes(store?: DeviceStore): RouterType {
     asyncHandler(controller.profile),
   );
   routes.get(
+    "/:id/browse",
+    validateParams(deviceIdParamsSchema),
+    asyncHandler(controller.browse),
+  );
+  routes.get(
     "/:id",
     validateParams(deviceIdParamsSchema),
     asyncHandler(controller.get),

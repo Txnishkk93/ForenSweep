@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
-import { exportRecoveredFile, getJob, getRecoveredFiles } from "@/lib/backend-api";
+import { downloadRecoveredFile, getJob, getRecoveredFiles } from "@/lib/backend-api";
+import { saveBytesToDisk } from "@/lib/save-file";
 import { confidenceTone, formatBytes } from "@/lib/status-colors";
 import type { RecoveredFile } from "@/lib/types";
 
@@ -27,7 +28,7 @@ function ScoreBar({ label, value }: { label: string; value: number | undefined }
   );
 }
 
-function FileRow({ file, onExport }: { file: RecoveredFile; onExport: (fileId: string) => void }) {
+function FileRow({ file, onExport }: { file: RecoveredFile; onExport: (file: RecoveredFile) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="border-b border-hairline last:border-0">
@@ -66,7 +67,7 @@ function FileRow({ file, onExport }: { file: RecoveredFile; onExport: (fileId: s
           <Button
             variant="secondary"
             className="px-3 py-1.5 text-[13px]"
-            onClick={() => onExport(file.id)}
+            onClick={() => onExport(file)}
           >
             Export
           </Button>
@@ -122,9 +123,11 @@ export default function RecoveryJobDetailPage({
   const queryError = jobQuery.error ?? filesQuery.error;
   const displayError = error ?? (queryError instanceof Error ? queryError.message : null);
 
-  async function handleExport(fileId: string) {
+  async function handleExport(file: RecoveredFile) {
+    setError(null);
     try {
-      await exportRecoveredFile(fileId);
+      const blob = await downloadRecoveredFile(params.jobId, file.id);
+      await saveBytesToDisk(file.fileName ?? `recovered-${file.id}`, blob);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to export recovered file.");
     }
