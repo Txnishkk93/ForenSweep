@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,12 @@ def _write_professional_pdf(
     def paragraph(text: str, style: ParagraphStyle) -> Paragraph:
         return Paragraph(escape(str(text)).replace("\n", "<br/>"), style)
 
+    export_data = json.dumps(
+        {"payload": payload, "contentHash": digest, "signature": signature},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
     verified = bool(payload.get("verificationResult"))
     status_color = pass_background if verified else fail_background
     status_text = "Verified - no recoverable data found" if verified else "Verification failed - review required"
@@ -134,6 +141,10 @@ def _write_professional_pdf(
 
     def footer(canvas: Any, document: Any) -> None:
         canvas.saveState()
+        canvas.setSubject(
+            "ForenSweep-Certificate:"
+            + base64.b64encode(export_data).decode("ascii")
+        )
         canvas.setStrokeColor(hairline)
         canvas.line(document.leftMargin, 0.55 * inch, LETTER[0] - document.rightMargin, 0.55 * inch)
         canvas.setFont("Helvetica", 7.5)
@@ -167,6 +178,25 @@ def _write_professional_pdf(
     crypto.setStyle(TableStyle([("SPAN", (0, 2), (-1, 2)), ("SPAN", (0, 3), (-1, 3)), ("SPAN", (0, 4), (-1, 4)), ("SPAN", (0, 5), (-1, 5)), ("SPAN", (0, 6), (-1, 6)), ("SPAN", (0, 7), (-1, 7)), ("BACKGROUND", (0, 1), (-1, 1), soft), ("BACKGROUND", (0, 3), (-1, 3), soft), ("BACKGROUND", (0, 5), (-1, 5), soft), ("BACKGROUND", (0, 7), (-1, 7), soft), ("BOX", (0, 1), (-1, 1), 0.5, hairline), ("BOX", (0, 3), (-1, 3), 0.5, hairline), ("BOX", (0, 5), (-1, 5), 0.5, hairline), ("BOX", (0, 7), (-1, 7), 0.5, hairline), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
     story.extend([crypto, Spacer(1, 13), paragraph("Verification covers the test image and sampled regions, not an absolute physical-media claim.", small_style)])
     document.build(story, onFirstPage=footer, onLaterPages=footer)
+    try:
+        from pypdf import PdfReader, PdfWriter
+
+        writer = PdfWriter()
+        reader = PdfReader(str(path))
+        for page in reader.pages:
+            writer.add_page(page)
+        writer.add_metadata({
+            "/Subject": "ForenSweep-Certificate:"
+            + base64.b64encode(export_data).decode("ascii"),
+        })
+        writer.add_attachment("forensweep-certificate.json", export_data)
+        with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".pdf", delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+        with temporary_path.open("wb") as output:
+            writer.write(output)
+        temporary_path.replace(path)
+    except ImportError:
+        pass
 
 
 def write_pdf(
