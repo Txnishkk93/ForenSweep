@@ -28,6 +28,7 @@ function useLiveJob(jobId: string) {
       try {
         const job = await getJob(jobId);
         if (!active) return;
+        setError(null);
         setStatus(job.status);
         setProgress(job.progress);
         setVerified(job.verified);
@@ -61,6 +62,7 @@ export default function EraseJobDetailPage({
     useLiveJob(params.jobId);
   const [approving, setApproving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsAdmin(getUser()?.role === "ADMIN");
@@ -68,11 +70,16 @@ export default function EraseJobDetailPage({
 
   async function handleApprove() {
     setApproving(true);
+    setApprovalError(null);
     try {
       await approveJob(params.jobId);
       setApproved(true);
-    } catch {
-      // The polling request will surface the backend error state if approval fails.
+    } catch (approvalRequestError) {
+      setApprovalError(
+        approvalRequestError instanceof Error
+          ? approvalRequestError.message
+          : "Unable to approve this job.",
+      );
     } finally {
       setApproving(false);
     }
@@ -94,8 +101,9 @@ export default function EraseJobDetailPage({
             Waiting for admin approval
           </p>
           <p className="mt-1 text-[13px] text-warning">
-            Whole-drive erasure requires a second approver before it can run.
+            This destructive erasure requires administrator approval before it can run.
           </p>
+          {approvalError && <p className="mt-3 text-[13px] font-medium text-destructive-active">{approvalError}</p>}
           {isAdmin ? (
             <Button
               variant="secondary"

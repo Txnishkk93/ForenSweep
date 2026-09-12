@@ -238,7 +238,13 @@ export async function approveEraseJob(
   const approvedAt = new Date();
   const updated = await store.job.update({
     where: { id },
-    data: { approvalStatus: "APPROVED", approvedById: approverId, approvedAt },
+    data: {
+      approvalStatus: "APPROVED",
+      approvedById: approverId,
+      approvedAt,
+      status: "QUEUED",
+      stage: "QUEUED",
+    },
   });
   await invalidateCache(cacheKeys.jobs(job.userId, 1, 50));
   await invalidateCache(cacheKeys.jobSummary(job.userId));
