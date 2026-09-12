@@ -18,6 +18,7 @@ function useLiveJob(jobId: string) {
   const [verified, setVerified] = useState<boolean | null>(null);
   const [riskLevel, setRiskLevel] = useState<RiskLevel | null>(null);
   const [certificateId, setCertificateId] = useState<string | null>(null);
+  const [jobErrorMessage, setJobErrorMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ function useLiveJob(jobId: string) {
         setApproved(job.approvalStatus === "APPROVED" || job.approvalStatus === "NOT_REQUIRED");
         setCurrentPass(String((job as unknown as { stage?: string; currentPass?: number }).stage ?? (job as unknown as { currentPass?: number }).currentPass ?? "Processing"));
         setCertificateId(job.certificate?.id ?? null);
+        setJobErrorMessage(job.errorMessage);
         if (!terminalStatuses.includes(job.status)) {
           timeout = setTimeout(() => void refresh(), 2000);
         }
@@ -50,7 +52,7 @@ function useLiveJob(jobId: string) {
     };
   }, [jobId]);
 
-  return { status, progress, currentPass, approved, setApproved, verified, riskLevel, certificateId, error };
+  return { status, progress, currentPass, approved, setApproved, verified, riskLevel, certificateId, error, jobErrorMessage };
 }
 
 export default function EraseJobDetailPage({
@@ -58,7 +60,7 @@ export default function EraseJobDetailPage({
 }: {
   params: { jobId: string };
 }) {
-  const { status, progress, currentPass, approved, setApproved, verified, riskLevel, certificateId, error } =
+  const { status, progress, currentPass, approved, setApproved, verified, riskLevel, certificateId, error, jobErrorMessage } =
     useLiveJob(params.jobId);
   const [approving, setApproving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -94,6 +96,12 @@ export default function EraseJobDetailPage({
       />
 
       {error && <p className="mb-6 text-sm text-destructive-active">{error}</p>}
+      {status === "FAILED" && jobErrorMessage && (
+        <DataCard className="mb-6 border-destructive/30 bg-destructive-soft">
+          <p className="text-[14px] font-medium text-destructive-active">Erasure failed</p>
+          <p className="mt-1 break-words text-[13px] text-destructive-active">{jobErrorMessage}</p>
+        </DataCard>
+      )}
 
       {!approved && status !== "COMPLETED" && status !== "FAILED" && (
         <DataCard className="mb-6 border-warning/30 bg-warning-soft">

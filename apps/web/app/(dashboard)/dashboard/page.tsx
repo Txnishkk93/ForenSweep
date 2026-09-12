@@ -7,7 +7,7 @@ import { ShieldAlert, RotateCw, ShieldCheck, Search, Bell, Sun, ChevronRight, Pl
 import { DataCard, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getDeviceProfile, getDevices, getJobSummary, getJobs, profileToPlan } from "@/lib/backend-api";
-import { jobStatusLabel, jobStatusTone } from "@/lib/status-colors";
+import { eraseMethodLabel, jobStatusLabel, jobStatusTone } from "@/lib/status-colors";
 import type { JobStatus, SanitizationPlan } from "@/lib/types";
 import { ExpandableSection } from "@/components/ExpandableSection";
 
@@ -409,14 +409,17 @@ export default function DashboardPage() {
                           <Link
                             key={cert.id}
                             href={`/certificates/${cert.id}`}
-                            className="flex items-center justify-between gap-3 px-5 py-[15px] transition-colors hover:bg-canvas-soft"
+                              className="flex items-center justify-between gap-3 px-5 py-[15px] transition-colors hover:bg-canvas-soft"
                           >
                             <div className="min-w-0">
-                              <p className="truncate font-mono text-[12.5px] font-semibold tracking-[-0.01em] text-ink">
+                              <p className="truncate text-[12.5px] font-semibold tracking-[-0.01em] text-ink">
+                                {cert.targetDisplayName ?? "Certificate target"}
+                              </p>
+                              <p className="mt-0.5 font-mono text-[11px] text-body-muted">
                                 {cert.id}
                               </p>
                               <p className="mt-0.5 text-[11.5px] text-body-muted">
-                                {cert.method} · {cert.standard}
+                                {eraseMethodLabel(cert.method)} · {cert.standard}
                               </p>
                             </div>
                             <StatusBadge

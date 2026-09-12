@@ -47,6 +47,125 @@ def load_private_key(path: Path) -> Ed25519PrivateKey:
     return key
 
 
+def _method_label(method: str) -> str:
+    labels = {
+        "OVERWRITE_SINGLE": "Single-pass overwrite",
+        "OVERWRITE_MULTI": "Multi-pass overwrite",
+        "ATA_SECURE_ERASE": "ATA Secure Erase",
+        "NVME_SECURE_FORMAT": "NVMe Secure Format",
+        "CRYPTO_ERASE": "Cryptographic Erase",
+        "FILE_LEVEL_OVERWRITE": "File-level overwrite",
+    }
+    return labels.get(method, method.replace("_", " "))
+
+
+def _target_metadata(job: dict[str, Any], device: dict[str, Any]) -> tuple[str, list[str], str]:
+    scope = str(job.get("eraseScope") or "WHOLE_DRIVE")
+    raw_paths = job.get("eraseFileList") if scope == "SPECIFIC_FILES" else None
+    paths = [str(item) for item in raw_paths or [] if isinstance(item, str)]
+    if paths:
+        if len(paths) == 1:
+            display_name = Path(paths[0]).name or paths[0]
+        else:
+            display_name = "Selected files and folders"
+        return display_name, paths, "Local filesystem"
+    model = str(device.get("model") or "").strip()
+    location = str(device.get("path") or job.get("sourceImagePath") or "").strip()
+    return model or (Path(location).name if location else "Managed device image"), [location] if location else [], location
+
+
+def _write_professional_pdf(
+    path: Path,
+    payload: dict[str, Any],
+    digest: str,
+    signature: str,
+    previous_certificate_hash: str | None = None,
+) -> None:
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_RIGHT
+        from reportlab.lib.pagesizes import LETTER
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import inch
+        from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ink = colors.HexColor("#17201d")
+    muted = colors.HexColor("#68736e")
+    success = colors.HexColor("#14805d")
+    failure = colors.HexColor("#b4233f")
+    hairline = colors.HexColor("#dce3df")
+    soft = colors.HexColor("#f4f7f5")
+    pass_background = colors.HexColor("#e5f4ee")
+    fail_background = colors.HexColor("#fae8ed")
+    amber_background = colors.HexColor("#fff6df")
+    styles = getSampleStyleSheet()
+    wordmark_style = ParagraphStyle("Wordmark", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=17, leading=20, textColor=ink)
+    title_style = ParagraphStyle("Title", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=23, leading=27, textColor=ink, spaceAfter=4)
+    subtitle_style = ParagraphStyle("Subtitle", parent=styles["Normal"], fontName="Helvetica", fontSize=9, leading=12, textColor=muted)
+    section_style = ParagraphStyle("Section", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=ink, spaceBefore=6, spaceAfter=7)
+    label_style = ParagraphStyle("Label", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=muted, spaceAfter=3)
+    target_style = ParagraphStyle("Target", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=ink)
+    value_style = ParagraphStyle("Value", parent=styles["Normal"], fontName="Helvetica", fontSize=10, leading=14, textColor=ink)
+    path_style = ParagraphStyle("Path", parent=styles["Normal"], fontName="Helvetica", fontSize=9, leading=12, textColor=ink, leftIndent=8)
+    mono_style = ParagraphStyle("Mono", parent=styles["Normal"], fontName="Courier", fontSize=7.5, leading=9.5, textColor=ink, wordWrap="CJK")
+    right_mono_style = ParagraphStyle("RightMono", parent=mono_style, alignment=TA_RIGHT)
+    status_style = ParagraphStyle("Status", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=success, alignment=TA_LEFT)
+    small_style = ParagraphStyle("Small", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10, textColor=muted)
+
+    def paragraph(text: str, style: ParagraphStyle) -> Paragraph:
+        return Paragraph(escape(str(text)).replace("\n", "<br/>"), style)
+
+    verified = bool(payload.get("verificationResult"))
+    status_color = pass_background if verified else fail_background
+    status_text = "Verified - no recoverable data found" if verified else "Verification failed - review required"
+    issued_at = str(payload.get("endedAt", "")).replace("T", " ").replace("Z", " UTC")
+    device = payload.get("deviceSnapshot") or {}
+    target_name = str(payload.get("targetDisplayName") or device.get("model") or "Certificate target")
+    target_paths = [str(item) for item in payload.get("targetPaths") or []]
+    title = "Certificate of Data Recovery" if payload.get("jobType") == "RECOVER" else "Certificate of Secure Erasure"
+    method = _method_label(str(payload.get("method") or "UNKNOWN"))
+    standard = str(payload.get("standard") or "NIST_800_88").replace("_", " ")
+    location = str(device.get("path") or "")
+
+    def footer(canvas: Any, document: Any) -> None:
+        canvas.saveState()
+        canvas.setStrokeColor(hairline)
+        canvas.line(document.leftMargin, 0.55 * inch, LETTER[0] - document.rightMargin, 0.55 * inch)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(muted)
+        canvas.drawString(document.leftMargin, 0.37 * inch, "Independently re-verifiable certificate")
+        canvas.drawRightString(LETTER[0] - document.rightMargin, 0.37 * inch, f"Generated {issued_at}")
+        canvas.restoreState()
+
+    document = SimpleDocTemplate(str(path), pagesize=LETTER, rightMargin=0.72 * inch, leftMargin=0.72 * inch, topMargin=0.55 * inch, bottomMargin=0.82 * inch)
+    story: list[Any] = []
+    header = Table([[paragraph("ForenSweep", wordmark_style), paragraph(payload.get("certificateNumber", ""), right_mono_style)]], colWidths=[4.7 * inch, 2.0 * inch])
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT"), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+    story.extend([header, HRFlowable(width="100%", thickness=0.7, color=hairline), Spacer(1, 18), paragraph(title, title_style), paragraph(f"Completed {issued_at}", subtitle_style), Spacer(1, 18)])
+
+    target = Table([[paragraph("WHAT WAS PROCESSED", label_style)], [paragraph(target_name, target_style)], [paragraph((f"On {device.get('model')}" if device.get("model") else "") + (f" at {location}" if location else ""), subtitle_style)]], colWidths=[6.35 * inch])
+    target.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), soft), ("BOX", (0, 0), (-1, -1), 0.6, hairline), ("LEFTPADDING", (0, 0), (-1, -1), 13), ("RIGHTPADDING", (0, 0), (-1, -1), 13), ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7)]))
+    story.extend([target, Spacer(1, 12)])
+    if target_paths:
+        story.append(paragraph("TARGET PATHS", label_style))
+        story.extend(paragraph(f"- {item}", path_style) for item in target_paths)
+        story.append(Spacer(1, 9))
+
+    status = Table([[paragraph(status_text, status_style)]], colWidths=[6.35 * inch])
+    status.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), status_color), ("BOX", (0, 0), (-1, -1), 0.5, status_color), ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12), ("TOPPADDING", (0, 0), (-1, -1), 9), ("BOTTOMPADDING", (0, 0), (-1, -1), 9), ("TEXTCOLOR", (0, 0), (-1, -1), success if verified else failure)]))
+    story.extend([status, Spacer(1, 14), paragraph("Method and standard", section_style)])
+    details = Table([[paragraph("METHOD", label_style), paragraph("STANDARD", label_style)], [paragraph(method, value_style), paragraph(standard, value_style)]], colWidths=[3.15 * inch, 3.2 * inch])
+    details.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 16), ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+    story.extend([details, Spacer(1, 12), paragraph("For verification purposes", section_style)])
+    previous = previous_certificate_hash or "GENESIS"
+    crypto = Table([[paragraph("JOB ID", label_style), paragraph("CERTIFICATE ID", label_style)], [paragraph(payload.get("jobId", ""), mono_style), paragraph(payload.get("certificateNumber", ""), mono_style)], [paragraph("CONTENT HASH", label_style)], [paragraph(digest, mono_style)], [paragraph("SIGNATURE (ED25519)", label_style)], [paragraph(signature, mono_style)], [paragraph("PREVIOUS CERTIFICATE HASH", label_style)], [paragraph(previous, mono_style)]], colWidths=[3.15 * inch, 3.2 * inch])
+    crypto.setStyle(TableStyle([("SPAN", (0, 2), (-1, 2)), ("SPAN", (0, 3), (-1, 3)), ("SPAN", (0, 4), (-1, 4)), ("SPAN", (0, 5), (-1, 5)), ("SPAN", (0, 6), (-1, 6)), ("SPAN", (0, 7), (-1, 7)), ("BACKGROUND", (0, 1), (-1, 1), soft), ("BACKGROUND", (0, 3), (-1, 3), soft), ("BACKGROUND", (0, 5), (-1, 5), soft), ("BACKGROUND", (0, 7), (-1, 7), soft), ("BOX", (0, 1), (-1, 1), 0.5, hairline), ("BOX", (0, 3), (-1, 3), 0.5, hairline), ("BOX", (0, 5), (-1, 5), 0.5, hairline), ("BOX", (0, 7), (-1, 7), 0.5, hairline), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+    story.extend([crypto, Spacer(1, 13), paragraph("Verification covers the test image and sampled regions, not an absolute physical-media claim.", small_style)])
+    document.build(story, onFirstPage=footer, onLaterPages=footer)
+
+
 def write_pdf(
     path: Path,
     payload: dict[str, Any],
@@ -54,6 +173,8 @@ def write_pdf(
     signature: str,
     previous_certificate_hash: str | None = None,
 ) -> None:
+    _write_professional_pdf(path, payload, digest, signature, previous_certificate_hash)
+    return
     try:
         from reportlab.lib import colors
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -228,10 +349,12 @@ def utc_isoformat(value: datetime) -> str:
 def create_certificate(context: dict[str, Any], verification: dict[str, Any], config: Any, started_at: datetime) -> dict[str, Any]:
     job = context["job"]
     device = context.get("device") or {}
+    target_display_name, target_paths, _ = _target_metadata(job, device)
     ended_at = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "certificateNumber": f"FS-{ended_at.strftime('%Y%m%d%H%M%S')}-{job['id'][:8].upper()}",
         "jobId": job["id"],
+        "jobType": job.get("type") or "ERASE",
         "deviceSnapshot": device,
         "method": job.get("eraseMethod") or "UNKNOWN",
         "standard": job.get("standard") or "NIST_800_88",
@@ -245,6 +368,8 @@ def create_certificate(context: dict[str, Any], verification: dict[str, Any], co
         "verificationDetail": verification["details"],
         "toolMetadata": {"name": "forensweep-worker", "version": "0.1.0", "mode": "simulated-image"},
         "scope": job.get("eraseScope") or "WHOLE_DRIVE",
+        "targetDisplayName": target_display_name,
+        "targetPaths": target_paths,
         "warnings": [],
         "limitations": ["Verification applies to the test image and sampled regions, not an absolute physical-media claim."],
     }

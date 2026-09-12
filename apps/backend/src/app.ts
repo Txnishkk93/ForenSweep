@@ -53,7 +53,8 @@ export function createApp(
       allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
     }),
   );
-  app.use(express.json({ limit: "1mb" }));
+  // Completion certificates for large folder erasures include resolved paths.
+  app.use(express.json({ limit: "16mb" }));
   app.use((req, res, next) => {
     const startedAt = Date.now();
     res.on("finish", () =>

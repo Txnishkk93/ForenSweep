@@ -131,6 +131,9 @@ export interface Certificate {
   method: EraseMethod;
   standard: string;
   verificationResult: boolean;
+  targetDisplayName?: string;
+  targetPaths?: string[];
+  canonicalPayload?: Record<string, unknown>;
   contentHash: string;
   prevCertHash: string | null;
   signature: string;

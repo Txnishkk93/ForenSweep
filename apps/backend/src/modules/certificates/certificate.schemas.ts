@@ -3,6 +3,7 @@ import { z } from "zod";
 export const certificatePayloadSchema = z.object({
   certificateNumber: z.string().min(1),
   jobId: z.uuid(),
+  jobType: z.enum(["ERASE", "RECOVER"]).optional(),
   deviceSnapshot: z.record(z.string(), z.unknown()),
   method: z.string().min(1),
   standard: z.string().min(1),
@@ -16,6 +17,8 @@ export const certificatePayloadSchema = z.object({
   verificationDetail: z.record(z.string(), z.unknown()),
   toolMetadata: z.record(z.string(), z.unknown()),
   scope: z.string().min(1),
+  targetDisplayName: z.string().min(1).optional(),
+  targetPaths: z.array(z.string()).optional(),
   warnings: z.array(z.string()),
   limitations: z.array(z.string()),
 });

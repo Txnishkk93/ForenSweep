@@ -49,6 +49,25 @@ export function jobStatusLabel(status: JobStatus): string {
   }
 }
 
+export function eraseMethodLabel(method: string): string {
+  switch (method) {
+    case "OVERWRITE_SINGLE":
+      return "Single-pass overwrite";
+    case "OVERWRITE_MULTI":
+      return "Multi-pass overwrite";
+    case "ATA_SECURE_ERASE":
+      return "ATA Secure Erase";
+    case "NVME_SECURE_FORMAT":
+      return "NVMe Secure Format";
+    case "CRYPTO_ERASE":
+      return "Cryptographic Erase";
+    case "FILE_LEVEL_OVERWRITE":
+      return "File-level overwrite";
+    default:
+      return method.replaceAll("_", " ");
+  }
+}
+
 export function confidenceTone(level: ConfidenceLevel): Tone {
   if (level === "HIGH") return "success";
   if (level === "MEDIUM") return "warning";

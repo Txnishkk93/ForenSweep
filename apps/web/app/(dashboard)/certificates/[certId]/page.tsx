@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import { downloadCertificate, getCertificate, verifyCertificate } from "@/lib/backend-api";
 import { ApiError } from "@/lib/api-client";
 import type { Certificate } from "@/lib/types";
+import { eraseMethodLabel } from "@/lib/status-colors";
 
 export default function CertificateDetailPage({
   params,
@@ -83,14 +84,28 @@ export default function CertificateDetailPage({
 
   return (
     <div className="max-w-2xl">
-      <SectionHeading eyebrow="Certificate" title={cert.id} />
+      <SectionHeading eyebrow="Certificate" title={cert.targetDisplayName ?? "Certificate target"} />
       {error && <p className="mb-6 text-sm text-destructive-active">{error}</p>}
 
       <DataCard className="mb-6">
+        <div className="mb-6 border-b border-hairline pb-5">
+          <p className="text-body-muted">Reference ID</p>
+          <MonoText className="mt-1 block w-fit">{cert.id}</MonoText>
+          {cert.targetPaths && cert.targetPaths.length > 0 && (
+            <div className="mt-4">
+              <p className="text-body-muted">Target paths</p>
+              <ul className="mt-2 space-y-1 text-[13px] text-ink">
+                {cert.targetPaths.map((targetPath) => (
+                  <li key={targetPath} className="break-all">{targetPath}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-4 text-[14px]">
           <div>
             <p className="text-body-muted">Method</p>
-            <p className="mt-1 text-ink">{cert.method}</p>
+            <p className="mt-1 text-ink">{eraseMethodLabel(cert.method)}</p>
           </div>
           <div>
             <p className="text-body-muted">Standard</p>
