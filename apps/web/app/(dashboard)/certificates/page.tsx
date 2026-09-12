@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DataCard, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getCertificates } from "@/lib/backend-api";
+import { eraseMethodLabel } from "@/lib/status-colors";
 
 export default function CertificatesPage() {
   const { data: certificates = [], isLoading: loading, error } = useQuery({
@@ -34,12 +35,17 @@ export default function CertificatesPage() {
                 <td className="px-5 py-3">
                   <Link
                     href={`/certificates/${c.id}`}
-                    className="font-mono text-[13px] text-primary hover:underline"
+                    className="text-[13px] text-primary hover:underline"
                   >
-                    {c.id}
+                    <span className="block truncate font-medium text-ink">
+                      {c.targetDisplayName ?? "Certificate target"}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[11px] text-body-muted">
+                      {c.id}
+                    </span>
                   </Link>
                 </td>
-                <td className="px-5 py-3 text-body">{c.method}</td>
+                <td className="px-5 py-3 text-body">{eraseMethodLabel(c.method)}</td>
                 <td className="px-5 py-3 text-body">{c.standard}</td>
                 <td className="px-5 py-3">
                   <StatusBadge

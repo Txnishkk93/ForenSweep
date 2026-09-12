@@ -107,7 +107,13 @@ def run_local_file_erase(
             failures.append(failure)
             client.audit(job_id, {"action": "LOCAL_FILE_ERASE_FAILED", "detail": failure})
     remove_empty_directories(directories)
-    details = {"localFiles": True, "requestedPaths": raw_targets, "erasedPaths": erased, "failures": failures}
+    details = {
+        "localFiles": True,
+        "requestedPathCount": len(raw_targets),
+        "erasedPathCount": len(erased),
+        "failedPathCount": len(failures),
+        "failures": failures,
+    }
     if failures:
         client.fail(job_id, {"message": f"{len(failures)} local erase target(s) failed", "errorCode": "LOCAL_FILE_ERASE_FAILED"})
         return
