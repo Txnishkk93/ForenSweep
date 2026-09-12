@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { verify } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { canonicalJson, sha256 } from "@repo/crypto";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
@@ -26,6 +27,7 @@ type CertificateRecord = NonNullable<
 type CertificateWithDisplayData = CertificateRecord & {
   targetDisplayName: string;
   targetPaths: string[];
+  targetDeviceId: string | null;
 };
 
 function stringArray(value: unknown): string[] {
@@ -40,7 +42,7 @@ function certificateDisplayData(
     type: string;
     eraseScope: string | null;
     eraseFileList: unknown;
-    device: { model: string | null; path: string } | null;
+    device: { id: string; model: string | null; path: string } | null;
   } | null,
 ): CertificateWithDisplayData {
   const payload = (certificate.canonicalPayload ?? {}) as Record<string, unknown>;
@@ -59,7 +61,7 @@ function certificateDisplayData(
           : `${names.length} selected items`
         : job?.device?.model || (job?.type === "RECOVER" ? "Recovered files" : "Managed device");
   const { job: _job, ...certificateData } = certificate;
-  return { ...certificateData, targetDisplayName, targetPaths };
+  return { ...certificateData, targetDisplayName, targetPaths, targetDeviceId: job?.device?.id ?? null };
 }
 
 export async function persistCertificate(
@@ -190,6 +192,42 @@ export async function listCertificates(
     : read();
 }
 
+export async function listCertificatesForTarget(
+  deviceId: string | undefined,
+  targetPath: string | undefined,
+  userId: string,
+  isAdmin: boolean,
+  store: CertificateStore = prisma,
+) {
+  const certificates = await store.certificate.findMany({
+    where: {
+      verificationResult: true,
+      job: {
+        status: "COMPLETED",
+        verified: true,
+        ...(isAdmin ? undefined : { userId }),
+        ...(deviceId ? { deviceId } : {}),
+      },
+    },
+    include: { job: { include: { device: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return certificates
+    .filter((certificate) => {
+      if (!targetPath) return true;
+      const payload = (certificate.canonicalPayload ?? {}) as Record<string, unknown>;
+      const paths = stringArray(payload.targetPaths);
+      const jobPaths = stringArray(certificate.job.eraseFileList);
+      return [
+        certificate.job.sourceImagePath,
+        certificate.job.device?.path,
+        ...paths,
+        ...jobPaths,
+      ].some((value) => value === targetPath);
+    })
+    .map((certificate) => certificateDisplayData(certificate, certificate.job));
+}
+
 export async function verifyCertificate(
   input: z.infer<typeof verifyCertificateSchema>,
   userId: string,
@@ -198,7 +236,16 @@ export async function verifyCertificate(
   const computedHash = sha256(input.payload);
   let signatureValid = false;
   try {
-    const publicKey = await readFile(env.CERT_PUBLIC_KEY_PATH);
+    let publicKey: Buffer;
+    try {
+      publicKey = await readFile(env.CERT_PUBLIC_KEY_PATH);
+    } catch {
+      publicKey = await readFile(
+        fileURLToPath(
+          new URL("../../../secrets/forensweep-ed25519-public.pem", import.meta.url),
+        ),
+      );
+    }
     signatureValid = verify(
       null,
       Buffer.from(input.contentHash),

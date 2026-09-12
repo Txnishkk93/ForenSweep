@@ -138,6 +138,13 @@ export async function getCertificates(): Promise<Certificate[]> {
   return apiFetch<Certificate[]>("/api/certificates");
 }
 
+export async function getCertificatesForTarget(input: { deviceId?: string; path?: string }): Promise<Certificate[]> {
+  const query = new URLSearchParams();
+  if (input.deviceId) query.set("deviceId", input.deviceId);
+  if (input.path) query.set("path", input.path);
+  return apiFetch<Certificate[]>(`/api/certificates/for-target?${query.toString()}`);
+}
+
 export async function getJob(jobId: string): Promise<Job> {
   return apiFetch<Job>(`/api/jobs/${jobId}`);
 }
@@ -167,6 +174,12 @@ export async function createRecoveryJob(input: {
   deviceId?: string;
   imageId?: string;
   scanType: "QUICK" | "DEEP";
+  certificateId?: string;
+  certificateVerification?: {
+    payload: Record<string, unknown>;
+    contentHash: string;
+    signature: string;
+  };
 }): Promise<Job> {
   return apiFetch<Job>("/api/jobs/recover", {
     method: "POST",

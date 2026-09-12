@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { createRecoveryJob, getAvailableImages, getDevices, uploadAcquisition } from "@/lib/backend-api";
+import { createRecoveryJob, getAvailableImages, getCertificates, getDevices, uploadAcquisition } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
+import type { Certificate } from "@/lib/types";
 
 export default function NewRecoveryPage() {
   const router = useRouter();
@@ -17,23 +19,46 @@ export default function NewRecoveryPage() {
   const [submitting, setSubmitting] = useState(false);
   const { data: devices = [], isLoading: loadingDevices, error: devicesError } = useQuery({ queryKey: ["devices"], queryFn: getDevices });
   const { data: images = [], isLoading: loadingImages, error: imagesError } = useQuery({ queryKey: ["available-images"], queryFn: getAvailableImages });
+  const { data: certificates = [] } = useQuery({ queryKey: ["certificates"], queryFn: getCertificates });
   const loadingSources = loadingDevices || loadingImages;
   const sourceError = devicesError ?? imagesError;
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [authorizationCertificateId, setAuthorizationCertificateId] = useState("");
+  const [pastedCertificate, setPastedCertificate] = useState("");
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
+
+  useEffect(() => {
+    const certificateId = new URLSearchParams(window.location.search).get("certificateId");
+    if (certificateId) setAuthorizationCertificateId(certificateId);
+  }, []);
+
+  useEffect(() => {
+    const certificate = certificates.find((item) => item.id === authorizationCertificateId);
+    if (certificate?.targetDeviceId) setAcquisitionId(certificate.targetDeviceId);
+  }, [authorizationCertificateId, certificates]);
 
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
     try {
       if (!acquisitionId) throw new Error("Select an acquisition first.");
+      let certificateVerification: { payload: Record<string, unknown>; contentHash: string; signature: string } | undefined;
+      if (pastedCertificate.trim()) {
+        try {
+          certificateVerification = JSON.parse(pastedCertificate) as typeof certificateVerification;
+        } catch {
+          throw new Error("Certificate paste must be valid JSON containing payload, contentHash, and signature.");
+        }
+      }
       const job = await createRecoveryJob({
         ...(acquisition ? { deviceId: acquisition.id } : { imageId: acquisitionId }),
         scanType: scanType.toUpperCase() as "QUICK" | "DEEP",
+        ...(authorizationCertificateId ? { certificateId: authorizationCertificateId } : {}),
+        ...(certificateVerification ? { certificateVerification } : {}),
       });
       router.push(`/recover/${job.id}`);
     } catch (requestError) {
@@ -64,6 +89,30 @@ export default function NewRecoveryPage() {
   return (
     <div className="max-w-2xl">
       <SectionHeading eyebrow="Forensic recovery" title="Recover deleted files" />
+
+      <DataCard className="mb-4">
+        <p className="mb-1 text-[15px] font-medium text-ink">Previously sanitized</p>
+        <p className="mb-3 text-[13px] text-body-muted">
+          These records authorize an attempt to scan the same target. A successful secure wipe is not reversible and may correctly produce no recoverable files.
+        </p>
+        <div className="divide-y divide-hairline">
+          {certificates.filter((certificate) => certificate.verificationResult).map((certificate) => (
+            <div key={certificate.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-medium text-ink">{certificate.targetDisplayName ?? "Sanitized target"}</p>
+                <p className="text-[12px] text-body-muted">{certificate.method} · {certificate.standard} · {new Date(certificate.createdAt).toLocaleDateString()}</p>
+              </div>
+              <Link
+                href={`/recover/new?certificateId=${certificate.id}`}
+                className="shrink-0 rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery hover:bg-recovery-soft"
+              >
+                Recover
+              </Link>
+            </div>
+          ))}
+          {!certificates.length && <p className="py-2 text-[13px] text-body-muted">No completed ForenSweep sanitizations found.</p>}
+        </div>
+      </DataCard>
 
       <DataCard className="mb-4">
         <p className="mb-3 text-[15px] font-medium text-ink">
@@ -137,6 +186,31 @@ export default function NewRecoveryPage() {
             </p>
           </div>
         )}
+      </DataCard>
+
+      <DataCard className="mb-4">
+        <p className="mb-1 text-[15px] font-medium text-ink">Certificate authorization</p>
+        <p className="mb-3 text-[13px] text-body-muted">
+          Select the matching certificate for a previously sanitized target, or paste exported verification JSON. This authorizes a scan attempt; it does not reverse a wipe.
+        </p>
+        <select
+          value={authorizationCertificateId}
+          onChange={(event) => setAuthorizationCertificateId(event.target.value)}
+          className="w-full rounded border border-hairline-strong bg-surface-card px-3 py-2 text-sm text-ink"
+        >
+          <option value="">No certificate selected</option>
+          {certificates.map((certificate: Certificate) => (
+            <option key={certificate.id} value={certificate.id}>
+              {certificate.targetDisplayName ?? "Sanitized target"} · {new Date(certificate.createdAt).toLocaleDateString()}
+            </option>
+          ))}
+        </select>
+        <textarea
+          value={pastedCertificate}
+          onChange={(event) => setPastedCertificate(event.target.value)}
+          placeholder='Paste certificate JSON: {"payload":...,"contentHash":"...","signature":"..."}'
+          className="mt-3 min-h-24 w-full rounded border border-hairline-strong bg-surface-card px-3 py-2 font-mono text-[11px] text-ink"
+        />
       </DataCard>
 
       {(error || sourceError) && <p className="mb-4 text-[13px] text-destructive-active">{error ?? (sourceError instanceof Error ? sourceError.message : "Unable to load acquisitions.")}</p>}
