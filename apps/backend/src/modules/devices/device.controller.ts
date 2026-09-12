@@ -3,6 +3,7 @@ import { sendSuccess } from "../../lib/serialize.js";
 import {
   getDevice,
   getDeviceProfile,
+  browseDevice,
   listDevices,
   previewErase,
   refreshDevices,
@@ -30,6 +31,17 @@ export function createDeviceController(store?: DeviceStore) {
       sendSuccess(res, await refreshDevices(req.auth!.userId, store), 200, {
         requestId: req.requestId,
       })) as RequestHandler,
+    browse: (async (req, res) =>
+      sendSuccess(
+        res,
+        await browseDevice(
+          String(req.params.id),
+          typeof req.query.path === "string" ? req.query.path : undefined,
+          store,
+        ),
+        200,
+        { requestId: req.requestId },
+      )) as RequestHandler,
     preview: (async (req, res) =>
       sendSuccess(
         res,

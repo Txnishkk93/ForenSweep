@@ -5,6 +5,7 @@ import type {
   AvailableImage,
   Certificate,
   Device,
+  DeviceBrowseResponse,
   EraseMethod,
   Job,
   RecoveredFile,
@@ -75,6 +76,11 @@ export async function getDevice(deviceId: string): Promise<Device> {
 
 export async function getDeviceProfile(deviceId: string): Promise<DeviceProfileResponse> {
   return apiFetch<DeviceProfileResponse>(`/api/devices/${deviceId}/profile`);
+}
+
+export async function browseDevice(deviceId: string, path?: string): Promise<DeviceBrowseResponse> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return apiFetch<DeviceBrowseResponse>(`/api/devices/${deviceId}/browse${query}`);
 }
 
 export function profileToPlan(profile: DeviceProfileResponse): SanitizationPlan {
@@ -165,6 +171,10 @@ export async function getRecoveredFiles(jobId: string): Promise<RecoveredFile[]>
 
 export async function exportRecoveredFile(fileId: string): Promise<unknown> {
   return apiFetch(`/api/recovered-files/${fileId}/export`, { method: "POST" });
+}
+
+export async function downloadRecoveredFile(jobId: string, fileId: string): Promise<Blob> {
+  return apiFetchBlob(`/api/jobs/${jobId}/recovered-files/${fileId}/download`);
 }
 
 export async function getCertificateForJob(jobId: string): Promise<Certificate> {

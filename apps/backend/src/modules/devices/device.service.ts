@@ -1,4 +1,6 @@
 import { sha256 } from "@repo/crypto";
+import { readdir, realpath, stat } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { evaluateDevicePolicy } from "@repo/device-policy";
 import type { DeviceProfile } from "@repo/shared";
 import type { Prisma } from "@prisma/client";
@@ -26,6 +28,20 @@ export type DeviceRecord = {
 };
 
 export type DeviceStore = Pick<typeof prisma, "device" | "auditLog">;
+
+export type DeviceFsEntry = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  sizeBytes: string | null;
+  modifiedAt: string | null;
+};
+
+export type DeviceBrowseResponse = {
+  currentPath: string;
+  parentPath: string | null;
+  entries: DeviceFsEntry[];
+};
 
 function toProfile(device: DeviceRecord): DeviceProfile {
   const deviceInterface = device.supportsNvme
@@ -155,6 +171,70 @@ export async function getDeviceProfile(
   };
 }
 
+export async function browseDevice(
+  id: string,
+  requestedPath: string | undefined,
+  store: DeviceStore = prisma,
+): Promise<DeviceBrowseResponse> {
+  const device = await getDevice(id, store);
+  if (!device.mounted) {
+    throw new AppError(404, "DEVICE_NOT_REACHABLE", "Device is not currently mounted or reachable");
+  }
+  let root: string;
+  try {
+    root = await realpath(device.path);
+  } catch {
+    throw new AppError(404, "DEVICE_NOT_REACHABLE", "Device path is not reachable");
+  }
+  const requested = requestedPath?.trim() || ".";
+  const candidate = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
+  const relativePath = relative(root, candidate);
+  if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+    throw new AppError(400, "INVALID_DEVICE_PATH", "Path escapes the device root");
+  }
+  let currentPath: string;
+  try {
+    currentPath = await realpath(candidate);
+    if (currentPath !== root && !currentPath.startsWith(`${root}${sep}`)) {
+      throw new Error("symlink escape");
+    }
+    if (!(await stat(currentPath)).isDirectory()) throw new Error("not a directory");
+  } catch {
+    throw new AppError(400, "INVALID_DEVICE_PATH", "Path is invalid or not a directory");
+  }
+  const entries = await readdir(currentPath, { withFileTypes: true });
+  const visible = await Promise.all(entries.map(async (entry): Promise<DeviceFsEntry | null> => {
+    const entryPath = resolve(currentPath, entry.name);
+    let realEntry: string;
+    try {
+      realEntry = await realpath(entryPath);
+      if (realEntry !== root && !realEntry.startsWith(`${root}${sep}`)) return null;
+      const entryStat = await stat(realEntry);
+      return {
+        name: entry.name,
+        path: relative(root, realEntry) || ".",
+        type: entryStat.isDirectory() ? "directory" : "file",
+        sizeBytes: entryStat.isDirectory() ? null : entryStat.size.toString(),
+        modifiedAt: entryStat.mtime.toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  }));
+  const safeEntries = visible.filter((entry): entry is DeviceFsEntry => entry !== null);
+  safeEntries.sort((left, right) =>
+    Number(right.type === "directory") - Number(left.type === "directory") ||
+    left.name.localeCompare(right.name),
+  );
+  const currentRelative = relative(root, currentPath);
+  const parentPath = currentRelative ? relative(root, resolve(currentPath, "..")) || "." : null;
+  return {
+    currentPath: currentRelative || ".",
+    parentPath,
+    entries: safeEntries.slice(0, 200),
+  };
+}
+
 export async function refreshMockDevices(
   userId: string,
   store: DeviceStore = prisma,
@@ -198,11 +278,13 @@ export async function previewErase(
     device: { ...toProfile(device), path: device.path },
     ...policy,
     canProceed:
-      !device.mounted && !device.isSystemDisk && requestedMethodAccepted,
-    rejectionReason: device.mounted
+      !device.isSystemDisk &&
+      (input.eraseScope === "SPECIFIC_FILES" || !device.mounted) &&
+      requestedMethodAccepted,
+    rejectionReason: device.isSystemDisk
+      ? "SYSTEM_DISK_PROTECTED"
+      : device.mounted && input.eraseScope === "WHOLE_DRIVE"
       ? "DEVICE_MOUNTED"
-      : device.isSystemDisk
-        ? "SYSTEM_DISK_PROTECTED"
         : !requestedMethodAccepted
           ? "UNSAFE_REQUESTED_METHOD"
           : null,

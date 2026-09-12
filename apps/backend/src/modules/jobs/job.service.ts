@@ -49,8 +49,8 @@ async function loadDevice(
   return device as DeviceRecord;
 }
 
-function assertSafeDevice(device: DeviceRecord): void {
-  if (device.mounted)
+function assertSafeDevice(device: DeviceRecord, eraseScope: CreateEraseJobInput["eraseScope"]): void {
+  if (device.mounted && eraseScope === "WHOLE_DRIVE")
     throw new AppError(
       409,
       "DEVICE_MOUNTED",
@@ -111,7 +111,7 @@ export async function createEraseJob(
   const device = await loadDevice(input.deviceId, store);
   const hardwareJob = input.requestedMethod === "OVERWRITE_SINGLE" && hardwareDemoGate !== null;
   if (hardwareJob) assertHardwareEligibility(device, input);
-  assertSafeDevice(device);
+  assertSafeDevice(device, input.eraseScope);
   const policy = evaluateDevicePolicy({
     device: getDeviceProfile(device),
     eraseScope: input.eraseScope,
@@ -290,7 +290,7 @@ export async function createRecoveryJob(
   const device = input.deviceId
     ? await loadDevice(input.deviceId, store)
     : null;
-  if (device) assertSafeDevice(device);
+  if (device) assertSafeDevice(device, "WHOLE_DRIVE");
   const job = await store.job.create({
     data: {
       type: "RECOVER",

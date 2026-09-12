@@ -8,6 +8,8 @@ import { DataCard, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createEraseJob, getDeviceProfile, getDevices, profileToPlan, refreshDevices } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
+import { DeviceFileBrowser } from "@/components/DeviceFileBrowser";
+import type { DeviceFsEntry } from "@/lib/types";
 
 type Scope = "whole_drive" | "files";
 type Standard = "NIST_800_88" | "DOD_5220_22_M";
@@ -20,7 +22,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
   const [step, setStep] = useState(0);
   const [deviceId, setDeviceId] = useState<string>(initialDeviceId ?? "");
   const [scope, setScope] = useState<Scope>("whole_drive");
-  const [fileList, setFileList] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<DeviceFsEntry[]>([]);
   const [standard, setStandard] = useState<Standard>("NIST_800_88");
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -63,7 +65,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
         standard,
         typeToConfirm: confirmText,
         ...(scope === "files"
-          ? { eraseFileList: fileList.split(/\r?\n/).map((path) => path.trim()).filter(Boolean) }
+          ? { eraseFileList: selectedFiles.map((entry) => entry.path) }
           : {}),
       });
       await queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -120,7 +122,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
               <button
                 key={d.id}
                 type="button"
-                disabled={Boolean(d.mounted || d.isSystemDisk)}
+                disabled={Boolean(d.isSystemDisk)}
                 onClick={() => setDeviceId(d.id)}
                 className={
                   "rounded border px-4 py-3 text-left transition-colors " +
@@ -179,13 +181,11 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
                 <p className="text-[14px] font-medium text-ink">
                   Specific files or folders
                 </p>
-                {scope === "files" && (
-                  <textarea
-                    value={fileList}
-                    onChange={(e) => setFileList(e.target.value)}
-                    placeholder="One path per line"
-                    className="mt-2 w-full rounded border border-hairline-strong p-2 font-mono text-[13px]"
-                    rows={3}
+                {scope === "files" && deviceId && (
+                  <DeviceFileBrowser
+                    deviceId={deviceId}
+                    selectedPaths={selectedFiles}
+                    onSelectionChange={setSelectedFiles}
                   />
                 )}
               </div>
@@ -292,6 +292,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
             onClick={() => setStep((s) => s + 1)}
             disabled={
               (step === 0 && !deviceId) ||
+              (step === 1 && scope === "files" && selectedFiles.length === 0) ||
               (step === 4 && !canProceedFromConfirm)
             }
           >
