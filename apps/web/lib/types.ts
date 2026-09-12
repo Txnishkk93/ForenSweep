@@ -133,6 +133,7 @@ export interface Certificate {
   verificationResult: boolean;
   targetDisplayName?: string;
   targetPaths?: string[];
+  targetDeviceId?: string | null;
   canonicalPayload?: Record<string, unknown>;
   contentHash: string;
   prevCertHash: string | null;

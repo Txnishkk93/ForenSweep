@@ -14,6 +14,7 @@ import {
   getCertificateForUser,
   getCertificateForDownload,
   listCertificates,
+  listCertificatesForTarget,
   persistCertificate,
   verifyCertificate,
 } from "./certificate.service.js";
@@ -42,6 +43,15 @@ certificateRoutes.get(
       requestId: req.requestId,
     }),
   ),
+);
+certificateRoutes.get(
+  "/certificates/for-target",
+  asyncHandler(async (req, res) => {
+    const deviceId = typeof req.query.deviceId === "string" ? req.query.deviceId : undefined;
+    const targetPath = typeof req.query.path === "string" ? req.query.path : undefined;
+    const certificates = await listCertificatesForTarget(deviceId, targetPath, req.auth!.userId, req.auth!.role === "ADMIN");
+    sendSuccess(res, certificates, 200, { requestId: req.requestId });
+  }),
 );
 certificateRoutes.get(
   "/jobs/:id/certificate",

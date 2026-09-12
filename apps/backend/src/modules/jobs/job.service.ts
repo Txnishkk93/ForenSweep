@@ -15,8 +15,9 @@ import bcrypt from "bcryptjs";
 import { resolveAvailableImage } from "../acquisitions/acquisition.service.js";
 import { cacheKeys, getCachedOrFetch, invalidateCache } from "../../lib/cache.js";
 import { validateErasePaths } from "../filesystem/filesystem.service.js";
+import { verifyCertificate } from "../certificates/certificate.service.js";
 
-export type JobStore = Pick<typeof prisma, "device" | "job" | "auditLog">;
+export type JobStore = Pick<typeof prisma, "device" | "job" | "auditLog" | "certificate">;
 
 function getDeviceProfile(device: DeviceRecord) {
   return {
@@ -312,6 +313,102 @@ export async function createRecoveryJob(
     ? await loadDevice(input.deviceId, store)
     : null;
   if (device) assertSafeDevice(device, "WHOLE_DRIVE");
+  const requestedSourcePath = input.imageId
+    ? store === prisma
+      ? await resolveAvailableImage(input.imageId)
+      : `managed-image:${input.imageId}`
+    : undefined;
+  const matchingCertificates = store.certificate
+    ? await store.certificate.findMany({
+        where: {
+          verificationResult: true,
+          job: {
+            status: "COMPLETED",
+            verified: true,
+            ...(device ? { deviceId: device.id } : {}),
+          },
+        },
+        include: { job: true },
+        orderBy: { createdAt: "desc" },
+      }).then((certificates) => requestedSourcePath
+        ? certificates.filter((certificate) => {
+            const payload = certificate.canonicalPayload as Record<string, unknown>;
+            const snapshot = payload.deviceSnapshot as Record<string, unknown> | undefined;
+            return certificate.job.sourceImagePath === requestedSourcePath
+              || snapshot?.path === requestedSourcePath;
+          })
+        : certificates)
+    : [];
+  const requiresCertificate = matchingCertificates.length > 0;
+  let authorizationCertificate: (typeof matchingCertificates)[number] | null = null;
+  if (requiresCertificate) {
+    if (!input.certificateId && !input.certificateVerification) {
+      await appendAuditEvent(store, {
+        userId,
+        action: "RECOVERY_CERTIFICATE_AUTHORIZATION",
+        detail: {
+          target: { deviceId: device?.id ?? null, imageId: input.imageId ?? null },
+          certificateId: null,
+          verificationResult: false,
+          outcome: "BLOCKED",
+          reason: "NO_CERTIFICATE_PROVIDED",
+        },
+      });
+      throw new AppError(403, "RECOVERY_CERTIFICATE_REQUIRED", "This target was sanitized by ForenSweep. A matching certificate is required to authorize a recovery scan.");
+    }
+    if (input.certificateId) {
+      authorizationCertificate = matchingCertificates.find((certificate) => certificate.id === input.certificateId) ?? null;
+      if (!authorizationCertificate) {
+        await appendAuditEvent(store, {
+          userId,
+          action: "RECOVERY_CERTIFICATE_AUTHORIZATION",
+          detail: {
+            target: { deviceId: device?.id ?? null, imageId: input.imageId ?? null },
+            certificateId: input.certificateId,
+            verificationResult: false,
+            outcome: "BLOCKED",
+            reason: "CERTIFICATE_TARGET_MISMATCH",
+          },
+        });
+        throw new AppError(403, "CERTIFICATE_TARGET_MISMATCH", "Certificate does not match this recovery target.");
+      }
+      const verification = await verifyCertificate({
+        payload: authorizationCertificate.canonicalPayload as never,
+        contentHash: authorizationCertificate.contentHash,
+        signature: authorizationCertificate.signature,
+      }, userId, store);
+      if (!verification.valid) {
+        await appendAuditEvent(store, {
+          userId,
+          action: "RECOVERY_CERTIFICATE_AUTHORIZATION",
+          detail: { target: { deviceId: device?.id ?? null, imageId: input.imageId ?? null }, certificateId: authorizationCertificate.id, verificationResult: false, outcome: "BLOCKED", reason: verification.signatureValid ? "CERTIFICATE_HASH_INVALID" : "CERTIFICATE_SIGNATURE_INVALID" },
+        });
+        throw new AppError(403, verification.signatureValid ? "CERTIFICATE_HASH_INVALID" : "CERTIFICATE_SIGNATURE_INVALID", verification.signatureValid ? "Certificate content hash is invalid." : "Certificate signature invalid.");
+      }
+    } else if (input.certificateVerification) {
+      const verification = await verifyCertificate(input.certificateVerification, userId, store);
+      if (!verification.signatureValid) {
+        await appendAuditEvent(store, {
+          userId,
+          action: "RECOVERY_CERTIFICATE_AUTHORIZATION",
+          detail: { target: { deviceId: device?.id ?? null, imageId: input.imageId ?? null }, certificateId: null, verificationResult: false, outcome: "BLOCKED", reason: "CERTIFICATE_SIGNATURE_INVALID" },
+        });
+        throw new AppError(403, "CERTIFICATE_SIGNATURE_INVALID", "Certificate signature invalid.");
+      }
+      authorizationCertificate = matchingCertificates.find((certificate) => certificate.contentHash === input.certificateVerification!.contentHash) ?? null;
+      if (!authorizationCertificate || authorizationCertificate.jobId !== input.certificateVerification.payload.jobId) {
+        await appendAuditEvent(store, {
+          userId,
+          action: "RECOVERY_CERTIFICATE_AUTHORIZATION",
+          detail: { target: { deviceId: device?.id ?? null, imageId: input.imageId ?? null }, certificateId: null, verificationResult: true, outcome: "BLOCKED", reason: "CERTIFICATE_TARGET_MISMATCH" },
+        });
+        throw new AppError(403, "CERTIFICATE_TARGET_MISMATCH", "Certificate does not match this recovery target.");
+      }
+    }
+  }
+  const progressDetail = authorizationCertificate
+    ? { certificateAuthorized: true, authorizationCertificateId: authorizationCertificate.id }
+    : {};
   const job = await store.job.create({
     data: {
       type: "RECOVER",
@@ -320,7 +417,7 @@ export async function createRecoveryJob(
       progress: 0,
       currentPass: 0,
       totalPasses: 0,
-      progressDetail: {},
+      progressDetail,
       deviceId: device?.id,
       userId,
       scanType: input.scanType,
@@ -331,6 +428,19 @@ export async function createRecoveryJob(
         : undefined,
     },
   });
+  if (authorizationCertificate) {
+    await appendAuditEvent(store, {
+      userId,
+      jobId: job.id,
+      action: "RECOVERY_CERTIFICATE_AUTHORIZATION",
+      detail: {
+        target: { deviceId: device?.id ?? null, imageId: input.imageId ?? null },
+        certificateId: authorizationCertificate.id,
+        verificationResult: true,
+        outcome: "JOB_CREATED",
+      },
+    });
+  }
   await invalidateCache(cacheKeys.jobs(userId, 1, 50));
   await invalidateCache(cacheKeys.jobSummary(userId));
   await appendAuditEvent(store, {

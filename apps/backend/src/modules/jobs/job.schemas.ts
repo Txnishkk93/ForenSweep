@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { eraseMethodSchema, eraseScopeSchema } from "@repo/shared";
+import { certificatePayloadSchema } from "../certificates/certificate.schemas.js";
 
 export const jobIdParamsSchema = z.object({ id: z.uuid() });
 
@@ -33,6 +34,12 @@ export const createRecoveryJobSchema = z
     deviceId: z.uuid().optional(),
     imageId: z.uuid().optional(),
     scanType: z.enum(["QUICK", "DEEP"]).default("QUICK"),
+    certificateId: z.uuid().optional(),
+    certificateVerification: z.object({
+      payload: certificatePayloadSchema,
+      contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+      signature: z.string().min(1),
+    }).optional(),
   })
   .strict()
   .refine((value) => Boolean(value.deviceId) !== Boolean(value.imageId), {
