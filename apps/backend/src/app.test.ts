@@ -207,6 +207,22 @@ test("signup and register create operator users with access tokens", async () =>
     assert.ok(body.data.accessToken);
     assert.equal(body.data.user.role, "OPERATOR");
     assert.equal("passwordHash" in body.data.user, false);
+
+    if (path.endsWith("signup")) {
+      const loginResponse = await request(signupApp, "/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          identifier: "SIGNUP@EXAMPLE.TEST",
+          password: "password123",
+        }),
+      });
+      const loginBody = (await loginResponse.json()) as {
+        data: { accessToken: string };
+      };
+      assert.equal(loginResponse.status, 200);
+      assert.ok(loginBody.data.accessToken);
+    }
   }
   assert.equal(signupUsers.length, 2);
   assert.notEqual(signupUsers[0].passwordHash, "password123");

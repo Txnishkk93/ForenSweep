@@ -11,8 +11,14 @@ export async function authenticateUser(
   password: string,
   userStore: UserStore = prisma,
 ): Promise<AuthUser | null> {
+  const normalizedIdentifier = identifier.trim();
   const user = await userStore.user.findFirst({
-    where: { OR: [{ username: identifier }, { email: identifier }] },
+    where: {
+      OR: [
+        { username: normalizedIdentifier },
+        { email: normalizedIdentifier.toLowerCase() },
+      ],
+    },
   });
   if (!user || !(await bcrypt.compare(password, user.passwordHash)))
     return null;
