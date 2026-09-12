@@ -14,6 +14,7 @@ import fs from "node:fs";
 import bcrypt from "bcryptjs";
 import { resolveAvailableImage } from "../acquisitions/acquisition.service.js";
 import { cacheKeys, getCachedOrFetch, invalidateCache } from "../../lib/cache.js";
+import { validateErasePaths } from "../filesystem/filesystem.service.js";
 
 export type JobStore = Pick<typeof prisma, "device" | "job" | "auditLog">;
 
@@ -108,15 +109,27 @@ export async function createEraseJob(
   store: JobStore = prisma,
   queue?: JobQueue,
 ) {
-  const device = await loadDevice(input.deviceId, store);
+  const localFileJob = input.eraseScope === "SPECIFIC_FILES" && !input.deviceId;
+  const device = input.deviceId ? await loadDevice(input.deviceId, store) : null;
+  const resolvedFileList = localFileJob
+    ? await validateErasePaths(input.eraseFileList ?? [])
+    : input.eraseFileList ?? [];
+  if (localFileJob && !resolvedFileList.length)
+    throw new AppError(400, "ERASE_TARGET_REQUIRED", "At least one local file or folder is required");
   const hardwareJob = input.requestedMethod === "OVERWRITE_SINGLE" && hardwareDemoGate !== null;
-  if (hardwareJob) assertHardwareEligibility(device, input);
-  assertSafeDevice(device, input.eraseScope);
-  const policy = evaluateDevicePolicy({
-    device: getDeviceProfile(device),
-    eraseScope: input.eraseScope,
-    requestedMethod: input.requestedMethod,
-  });
+  if (device && hardwareJob) assertHardwareEligibility(device, input);
+  if (device) assertSafeDevice(device, input.eraseScope);
+  const policy = device
+    ? evaluateDevicePolicy({
+        device: getDeviceProfile(device),
+        eraseScope: input.eraseScope,
+        requestedMethod: input.requestedMethod,
+      })
+    : {
+        recommendedMethod: "FILE_LEVEL_OVERWRITE" as const,
+        riskLevel: "HIGH" as const,
+        warnings: ["File-level overwrites cannot guarantee physical-cell erasure on SSD media."],
+      };
   if (
     input.requestedMethod &&
     input.requestedMethod !== policy.recommendedMethod
@@ -127,7 +140,7 @@ export async function createEraseJob(
       "Requested erase method is not safe for this device",
     );
   }
-  if (!confirmationValues(device).includes(input.typeToConfirm)) {
+  if (!(device ? confirmationValues(device) : ["ERASE"]).includes(input.typeToConfirm)) {
     throw new AppError(
       400,
       "INVALID_CONFIRMATION",
@@ -146,7 +159,8 @@ export async function createEraseJob(
       progressDetail: {
         requestedMethod: input.requestedMethod ?? null,
         recommendedMethod: policy.recommendedMethod,
-        ...(hardwareJob
+        ...(localFileJob ? { erasePaths: resolvedFileList } : {}),
+        ...(hardwareJob && device
           ? {
               hardware: true,
               operatorSerial: input.operatorSerial,
@@ -166,12 +180,12 @@ export async function createEraseJob(
             }
           : {}),
       },
-      deviceId: device.id,
+      deviceId: device?.id,
       userId,
       approvalStatus: requiresApproval ? "PENDING" : "NOT_REQUIRED",
       eraseMethod: policy.recommendedMethod,
       eraseScope: input.eraseScope,
-      eraseFileList: input.eraseFileList ?? Prisma.JsonNull,
+      eraseFileList: resolvedFileList ?? Prisma.JsonNull,
       standard: input.standard ?? "NIST_800_88",
       residualRiskLevel: policy.riskLevel,
     },
@@ -183,9 +197,10 @@ export async function createEraseJob(
     jobId: job.id,
     action: "ERASE_REQUESTED",
     detail: {
-      deviceId: device.id,
+      deviceId: device?.id ?? null,
       eraseScope: input.eraseScope,
       eraseMethod: policy.recommendedMethod,
+      ...(localFileJob ? { paths: resolvedFileList } : {}),
     },
   });
   if (queue && !requiresApproval) await queue.addErase(job.id);

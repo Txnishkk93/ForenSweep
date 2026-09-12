@@ -46,6 +46,21 @@ export interface DeviceBrowseResponse {
   entries: DeviceFsEntry[];
 }
 
+export interface FsEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  sizeBytes: string | null;
+  modifiedAt: string | null;
+  isSystemProtected?: boolean;
+}
+
+export interface FsBrowseResponse {
+  currentPath: string | null;
+  parentPath: string | null;
+  entries: FsEntry[];
+}
+
 export interface AvailableImage {
   id: string;
   filename: string;

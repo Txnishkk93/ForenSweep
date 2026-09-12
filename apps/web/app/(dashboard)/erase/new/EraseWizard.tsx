@@ -8,11 +8,14 @@ import { DataCard, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createEraseJob, getDeviceProfile, getDevices, profileToPlan, refreshDevices } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
-import { DeviceFileBrowser } from "@/components/DeviceFileBrowser";
-import type { DeviceFsEntry } from "@/lib/types";
+import { LocalFileBrowser } from "@/components/LocalFileBrowser";
+import type { FsEntry } from "@/lib/types";
 
 type Scope = "whole_drive" | "files";
 type Standard = "NIST_800_88" | "DOD_5220_22_M";
+type EraseTarget =
+  | { mode: "device"; deviceId: string }
+  | { mode: "files"; paths: FsEntry[] };
 
 const STEPS = ["Device", "Scope", "Standard", "Preview", "Confirm", "Submit"];
 
@@ -22,7 +25,10 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
   const [step, setStep] = useState(0);
   const [deviceId, setDeviceId] = useState<string>(initialDeviceId ?? "");
   const [scope, setScope] = useState<Scope>("whole_drive");
-  const [selectedFiles, setSelectedFiles] = useState<DeviceFsEntry[]>([]);
+  const [eraseTarget, setEraseTarget] = useState<EraseTarget>(
+    initialDeviceId ? { mode: "device", deviceId: initialDeviceId } : { mode: "device", deviceId: "" },
+  );
+  const [localFiles, setLocalFiles] = useState<FsEntry[]>([]);
   const [standard, setStandard] = useState<Standard>("NIST_800_88");
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -35,9 +41,12 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
     enabled: Boolean(deviceId),
   });
   const plan = profile ? profileToPlan(profile) : undefined;
+  const effectivePlan = eraseTarget.mode === "files"
+    ? { method: "FILE_LEVEL_OVERWRITE" as const, nistCategory: "CLEAR" as const, justification: "Each selected path will be securely overwritten before removal.", limitations: "SSD wear-leveling can retain data outside the logical file path." }
+    : plan;
 
   const device = devices.find((d) => d.id === deviceId);
-  const requiredConfirm = device?.serial ?? "ERASE";
+  const requiredConfirm = eraseTarget.mode === "files" ? "ERASE" : device?.serial ?? "ERASE";
   const canProceedFromConfirm = confirmText === requiredConfirm;
 
   async function handleRefresh() {
@@ -57,15 +66,16 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      if (!device || !plan) throw new Error("Select a device with an available policy.");
+      if (eraseTarget.mode === "device" && (!device || !effectivePlan)) throw new Error("Select a device with an available policy.");
+      if (eraseTarget.mode === "files" && !localFiles.length) throw new Error("Select at least one file or folder.");
       const job = await createEraseJob({
-        deviceId: device.id,
-        eraseScope: scope === "whole_drive" ? "WHOLE_DRIVE" : "SPECIFIC_FILES",
-        requestedMethod: plan.method,
+        ...(eraseTarget.mode === "device" ? { deviceId: device!.id } : {}),
+        eraseScope: eraseTarget.mode === "device" ? "WHOLE_DRIVE" : "SPECIFIC_FILES",
+        requestedMethod: effectivePlan!.method,
         standard,
         typeToConfirm: confirmText,
-        ...(scope === "files"
-          ? { eraseFileList: selectedFiles.map((entry) => entry.path) }
+        ...(eraseTarget.mode === "files"
+          ? { eraseFileList: localFiles.map((entry) => entry.path) }
           : {}),
       });
       await queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -107,12 +117,18 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
       {step === 0 && (
         <DataCard>
           <p className="mb-3 text-[15px] font-medium text-ink">Select device</p>
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex rounded border border-hairline-strong bg-canvas-soft p-0.5" role="group" aria-label="Erase target">
+              <button type="button" onClick={() => { setEraseTarget({ mode: "device", deviceId }); setScope("whole_drive"); }} className={`rounded px-3 py-1.5 text-[12px] font-medium ${eraseTarget.mode === "device" ? "bg-white text-ink shadow-sm" : "text-body-muted"}`}>Whole device</button>
+              <button type="button" onClick={() => { setEraseTarget({ mode: "files", paths: localFiles }); setScope("files"); }} className={`rounded px-3 py-1.5 text-[12px] font-medium ${eraseTarget.mode === "files" ? "bg-white text-ink shadow-sm" : "text-body-muted"}`}>Files &amp; folders</button>
+            </div>
             <Button variant="secondary" onClick={handleRefresh} disabled={refreshingDevices || loadingDevices}>
               {refreshingDevices ? "Rescanning..." : "Rescan"}
             </Button>
           </div>
-          <div className="flex flex-col gap-2">
+          {eraseTarget.mode === "files" ? (
+            <LocalFileBrowser selectedPaths={localFiles} onSelectionChange={(paths) => { setLocalFiles(paths); setEraseTarget({ mode: "files", paths }); }} />
+          ) : <div className="flex flex-col gap-2">
             {loadingDevices && <p className="text-sm text-body-muted">Loading devices...</p>}
             {!loadingDevices && !devices.length && !submitError && (
               <p className="text-sm text-body-muted">No removable or fixed storage devices detected - check connections and try Rescan.</p>
@@ -123,7 +139,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
                 key={d.id}
                 type="button"
                 disabled={Boolean(d.isSystemDisk)}
-                onClick={() => setDeviceId(d.id)}
+                onClick={() => { setDeviceId(d.id); setEraseTarget({ mode: "device", deviceId: d.id }); }}
                 className={
                   "rounded border px-4 py-3 text-left transition-colors " +
                   (deviceId === d.id
@@ -147,7 +163,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
                 </div>
               </button>
             ))}
-          </div>
+          </div>}
         </DataCard>
       )}
 
@@ -159,7 +175,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
               <input
                 type="radio"
                 checked={scope === "whole_drive"}
-                onChange={() => setScope("whole_drive")}
+                onChange={() => { setScope("whole_drive"); setEraseTarget({ mode: "device", deviceId }); }}
                 className="mt-1"
               />
               <div>
@@ -174,20 +190,14 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
               <input
                 type="radio"
                 checked={scope === "files"}
-                onChange={() => setScope("files")}
+                onChange={() => { setScope("files"); setEraseTarget({ mode: "files", paths: localFiles }); }}
                 className="mt-1"
               />
               <div className="w-full">
                 <p className="text-[14px] font-medium text-ink">
                   Specific files or folders
                 </p>
-                {scope === "files" && deviceId && (
-                  <DeviceFileBrowser
-                    deviceId={deviceId}
-                    selectedPaths={selectedFiles}
-                    onSelectionChange={setSelectedFiles}
-                  />
-                )}
+                {scope === "files" && <p className="mt-2 text-[13px] text-body-muted">Selected paths are reviewed in step 1.</p>}
               </div>
             </label>
           </div>
@@ -218,41 +228,41 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
         </DataCard>
       )}
 
-      {step === 3 && plan && device && (
+      {step === 3 && effectivePlan && (device || eraseTarget.mode === "files") && (
         <DataCard>
           <p className="mb-3 text-[15px] font-medium text-ink">
             Recommendation preview
           </p>
           <div className="flex items-center gap-2">
-            <p className="text-[18px] font-medium text-ink">{plan.method}</p>
-            <StatusBadge label={`NIST: ${plan.nistCategory}`} tone="info" />
+            <p className="text-[18px] font-medium text-ink">{effectivePlan.method}</p>
+            <StatusBadge label={`NIST: ${effectivePlan.nistCategory}`} tone="info" />
           </div>
-          <p className="mt-2 text-[14px] text-body">{plan.justification}</p>
-          {plan.limitations && (
+          <p className="mt-2 text-[14px] text-body">{effectivePlan.justification}</p>
+          {effectivePlan.limitations && (
             <div className="mt-4 rounded border border-warning/30 bg-warning-soft p-4">
               <p className="text-[13px] font-medium text-warning">
                 Limitation
               </p>
               <p className="mt-1 text-[13px] text-warning">
-                {plan.limitations}
+                {effectivePlan.limitations}
               </p>
             </div>
           )}
         </DataCard>
       )}
 
-      {step === 4 && device && (
+      {step === 4 && (device || eraseTarget.mode === "files") && (
         <DataCard className="border-destructive/40 bg-destructive-soft">
           <p className="text-[15px] font-semibold text-destructive-active">
             This action is irreversible
           </p>
           <p className="mt-1 text-[13px] text-destructive-active/90">
-            You are about to sanitize <strong>{device.model}</strong> (
-            {device.path}) using {plan?.method}. Data will not be recoverable
+            You are about to securely erase {eraseTarget.mode === "files" ? "these selected paths" : <><strong>{device?.model}</strong> ({device?.path})</>} using {effectivePlan?.method}. Data will not be recoverable
             through normal means once this completes and verification passes.
           </p>
+          {eraseTarget.mode === "files" && <div className="mt-3 max-h-36 overflow-y-auto rounded border border-destructive/20 bg-white p-3 font-mono text-[12px]">{localFiles.map((entry) => <div key={entry.path}>{entry.path}</div>)}</div>}
           <p className="mt-4 text-[13px] font-medium text-destructive-active">
-            Type the device serial to confirm: <MonoText>{requiredConfirm}</MonoText>
+            Type {eraseTarget.mode === "files" ? "ERASE" : "the device serial"} to confirm: <MonoText>{requiredConfirm}</MonoText>
           </p>
           <input
             value={confirmText}
@@ -291,8 +301,8 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
             variant={step === 4 ? "destructive" : "primary"}
             onClick={() => setStep((s) => s + 1)}
             disabled={
-              (step === 0 && !deviceId) ||
-              (step === 1 && scope === "files" && selectedFiles.length === 0) ||
+              (step === 0 && (eraseTarget.mode === "device" ? !deviceId : !localFiles.length)) ||
+              (step === 1 && scope === "files" && localFiles.length === 0) ||
               (step === 4 && !canProceedFromConfirm)
             }
           >
