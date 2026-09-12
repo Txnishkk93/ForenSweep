@@ -21,6 +21,9 @@ export type DeviceRecord = {
   supportsAta: boolean;
   supportsNvme: boolean;
   supportsSed: boolean;
+  supportsCryptoErase?: boolean;
+  supportsSecureErase?: boolean;
+  respondsToCommands?: boolean;
   mounted: boolean;
   isSystemDisk: boolean;
   capabilitySnapshot: unknown;
@@ -63,6 +66,10 @@ function toProfile(device: DeviceRecord): DeviceProfile {
     supportsAta: device.supportsAta,
     supportsNvme: device.supportsNvme,
     supportsSed: device.supportsSed,
+    supportsCryptoErase: device.supportsCryptoErase ?? device.supportsSed,
+    supportsSecureErase: device.supportsSecureErase ?? (device.supportsAta || device.supportsNvme),
+    isSsd: device.type === "SSD",
+    respondsToCommands: device.respondsToCommands ?? true,
     lastSeenAt: device.lastSeenAt.toISOString(),
   };
 }
@@ -268,7 +275,7 @@ export async function previewErase(
   const policy = findPolicy(device, input.eraseScope, input.requestedMethod);
   const requestedMethodAccepted =
     input.requestedMethod === undefined ||
-    input.requestedMethod === policy.recommendedMethod;
+    (input.requestedMethod !== "DESTROY" || policy.recommendedMethod === "DESTROY");
   const warnings = [...policy.warnings];
   if (input.eraseScope === "SPECIFIC_FILES" && device.type === "SSD")
     warnings.push(
@@ -311,6 +318,7 @@ export async function previewErase(
     eraseScope: input.eraseScope,
     requestedMethod: input.requestedMethod ?? null,
     recommendedMethod: policy.recommendedMethod,
+    sanitizationTier: policy.sanitizationTier,
   });
   return result;
 }

@@ -63,6 +63,7 @@ enum DeviceType {
 }
 
 enum EraseMethod {
+  DESTROY
   OVERWRITE_SINGLE
   OVERWRITE_MULTI
   ATA_SECURE_ERASE
@@ -115,6 +116,9 @@ model Device {
   supportsAta        Boolean    @default(false)
   supportsNvme       Boolean    @default(false)
   supportsSed        Boolean    @default(false)
+  supportsCryptoErase Boolean   @default(false)
+  supportsSecureErase Boolean    @default(false)
+  respondsToCommands Boolean    @default(true)
   mounted            Boolean    @default(false)
   isSystemDisk       Boolean    @default(false)
   capabilitySnapshot Json?

@@ -6,6 +6,7 @@ export const certificatePayloadSchema = z.object({
   jobType: z.enum(["ERASE", "RECOVER"]).optional(),
   deviceSnapshot: z.record(z.string(), z.unknown()),
   method: z.string().min(1),
+  sanitizationTier: z.enum(["CRYPTOGRAPHIC_ERASE", "FIRMWARE_SECURE_ERASE", "OVERWRITE"]).nullable(),
   standard: z.string().min(1),
   operatorReference: z.string().min(1),
   approvalReference: z.string().nullable(),

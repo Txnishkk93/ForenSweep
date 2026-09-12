@@ -437,9 +437,9 @@ test("device endpoints return BigInt-safe profiles and refresh audit events", as
   assert.equal(audits.at(-1)?.action, "DEVICE_SCAN");
 });
 
-test("HDD whole-drive preview recommends multi-pass overwrite", async () => {
+test("HDD whole-drive preview recommends single-pass overwrite", async () => {
   const result = await preview(baseDevice.id, {});
-  assert.equal(result.body.data.recommendedMethod, "OVERWRITE_MULTI");
+  assert.equal(result.body.data.recommendedMethod, "OVERWRITE_SINGLE");
 });
 
 test("SATA SSD preview recommends ATA secure erase", async () => {
@@ -454,7 +454,7 @@ test("SATA SSD preview recommends ATA secure erase", async () => {
   assert.equal(result.body.data.recommendedMethod, "ATA_SECURE_ERASE");
 });
 
-test("NVMe overwrite request is rejected as unsafe", async () => {
+test("NVMe overwrite request is allowed with a downgrade warning", async () => {
   const device = {
     ...baseDevice,
     id: "00000000-0000-4000-8000-000000000103",
@@ -465,8 +465,8 @@ test("NVMe overwrite request is rejected as unsafe", async () => {
   const result = await preview(device.id, {
     requestedMethod: "OVERWRITE_SINGLE",
   });
-  assert.equal(result.body.data.requestedMethodRejected, true);
-  assert.equal(result.body.data.simulationAvailable, false);
+  assert.equal(result.body.data.requestedMethodRejected, false);
+  assert.equal(result.body.data.warnings.some((warning: string) => warning.includes("Manual override")), true);
 });
 
 test("SED preview recommends cryptographic erase", async () => {

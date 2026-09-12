@@ -13,6 +13,9 @@ const deviceSyncRecordSchema = z.object({
   supports_ata: z.boolean(),
   supports_nvme: z.boolean(),
   supports_sed: z.boolean(),
+  supports_crypto_erase: z.boolean(),
+  supports_secure_erase: z.boolean(),
+  responds_to_commands: z.boolean(),
   capability_evidence: z.record(z.string(), z.unknown()),
 }).strict();
 

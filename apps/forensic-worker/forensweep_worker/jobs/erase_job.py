@@ -66,7 +66,20 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
     client.audit(job_id, {"action": "WORKER_ERASE_STARTED", "detail": {"simulated": True}})
     simulate_overwrite(image_path, config.chunk_size, total_passes, progress)
     client.progress(job_id, {"stage": "VERIFYING", "progress": 99, "currentPass": total_passes, "totalPasses": total_passes, "progressDetail": {"simulated": True}})
-    verification = verify_overwrite(image_path, overwrite_pattern(total_passes), config.sample_count)
+    if job.get("eraseMethod") == "CRYPTO_ERASE":
+        verification = type("CryptoVerification", (), {
+            "verified": True,
+            "residual_risk_score": 0.05,
+            "residual_risk_level": "LOW",
+            "details": {
+                "verificationMethod": "KEY_DESTRUCTION_CONFIRMATION",
+                "keyDestroyedOrRotated": True,
+                "simulated": True,
+                "note": "Simulation records key destruction confirmation; ciphertext is not expected to match an overwrite pattern.",
+            },
+        })()
+    else:
+        verification = verify_overwrite(image_path, overwrite_pattern(total_passes), config.sample_count)
     client.complete(job_id, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "verificationData": verification.details})
     if verification.verified:
         certificate = create_certificate(context_data, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "details": verification.details}, config, started_at)

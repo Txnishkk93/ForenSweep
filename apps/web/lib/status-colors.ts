@@ -51,6 +51,8 @@ export function jobStatusLabel(status: JobStatus): string {
 
 export function eraseMethodLabel(method: string): string {
   switch (method) {
+    case "DESTROY":
+      return "Physical destruction required";
     case "OVERWRITE_SINGLE":
       return "Single-pass overwrite";
     case "OVERWRITE_MULTI":

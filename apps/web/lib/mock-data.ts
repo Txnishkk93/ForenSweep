@@ -20,6 +20,10 @@ export const MOCK_DEVICES: Device[] = [
     supportsAta: false,
     supportsNvme: false,
     supportsSed: false,
+    supportsCryptoErase: false,
+    supportsSecureErase: false,
+    isSsd: false,
+    respondsToCommands: true,
   },
   {
     id: "dev-ssd-sata",
@@ -33,6 +37,10 @@ export const MOCK_DEVICES: Device[] = [
     supportsAta: true,
     supportsNvme: false,
     supportsSed: false,
+    supportsCryptoErase: false,
+    supportsSecureErase: true,
+    isSsd: true,
+    respondsToCommands: true,
   },
   {
     id: "dev-ssd-nvme",
@@ -46,6 +54,10 @@ export const MOCK_DEVICES: Device[] = [
     supportsAta: false,
     supportsNvme: true,
     supportsSed: true,
+    supportsCryptoErase: true,
+    supportsSecureErase: true,
+    isSsd: true,
+    respondsToCommands: true,
   },
   {
     id: "dev-usb-1",
@@ -59,6 +71,10 @@ export const MOCK_DEVICES: Device[] = [
     supportsAta: false,
     supportsNvme: false,
     supportsSed: false,
+    supportsCryptoErase: false,
+    supportsSecureErase: false,
+    isSsd: false,
+    respondsToCommands: true,
   },
 ];
 

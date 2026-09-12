@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { createEraseJob, getDeviceProfile, getDevices, profileToPlan, refreshDevices } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
 import { LocalFileBrowser } from "@/components/LocalFileBrowser";
-import type { FsEntry } from "@/lib/types";
+import type { EraseMethod, FsEntry } from "@/lib/types";
 
 type Scope = "whole_drive" | "files";
 type Standard = "NIST_800_88" | "DOD_5220_22_M";
@@ -30,6 +30,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
   );
   const [localFiles, setLocalFiles] = useState<FsEntry[]>([]);
   const [standard, setStandard] = useState<Standard>("NIST_800_88");
+  const [selectedMethod, setSelectedMethod] = useState<EraseMethod | undefined>();
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -41,9 +42,10 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
     enabled: Boolean(deviceId),
   });
   const plan = profile ? profileToPlan(profile) : undefined;
+  const autoMethod = plan?.method;
   const effectivePlan = eraseTarget.mode === "files"
     ? { method: "FILE_LEVEL_OVERWRITE" as const, nistCategory: "CLEAR" as const, justification: "Each selected path will be securely overwritten before removal.", limitations: "SSD wear-leveling can retain data outside the logical file path." }
-    : plan;
+    : plan && { ...plan, method: selectedMethod ?? plan.method };
 
   const device = devices.find((d) => d.id === deviceId);
   const requiredConfirm = eraseTarget.mode === "files" ? "ERASE" : device?.serial ?? "ERASE";
@@ -139,7 +141,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
                 key={d.id}
                 type="button"
                 disabled={Boolean(d.isSystemDisk)}
-                onClick={() => { setDeviceId(d.id); setEraseTarget({ mode: "device", deviceId: d.id }); }}
+                onClick={() => { setDeviceId(d.id); setSelectedMethod(undefined); setEraseTarget({ mode: "device", deviceId: d.id }); }}
                 className={
                   "rounded border px-4 py-3 text-left transition-colors " +
                   (deviceId === d.id
@@ -237,6 +239,24 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
             <p className="text-[18px] font-medium text-ink">{effectivePlan.method}</p>
             <StatusBadge label={`NIST: ${effectivePlan.nistCategory}`} tone="info" />
           </div>
+          {eraseTarget.mode === "device" && plan && (
+            <label className="mt-4 block text-[13px] text-body-muted">
+              Method override
+              <select value={selectedMethod ?? autoMethod} onChange={(event) => setSelectedMethod(event.target.value as EraseMethod)} className="mt-1 block w-full rounded border border-hairline-strong bg-white px-3 py-2 text-ink">
+                {(["DESTROY", "CRYPTO_ERASE", "NVME_SECURE_FORMAT", "ATA_SECURE_ERASE", "OVERWRITE_SINGLE", "OVERWRITE_MULTI", "FILE_LEVEL_OVERWRITE"] as EraseMethod[]).map((method) => <option key={method} value={method}>{method}</option>)}
+              </select>
+            </label>
+          )}
+          {eraseTarget.mode === "device" && selectedMethod && selectedMethod !== autoMethod && (
+            <div className="mt-4 rounded border border-warning/30 bg-warning-soft p-4 text-[13px] text-warning">
+              This manual override is weaker or different than the auto-recommended {autoMethod} for this device. It remains available for documented compliance requirements.
+            </div>
+          )}
+          {effectivePlan.method === "DESTROY" && (
+            <div className="mt-4 rounded border border-destructive/30 bg-destructive-soft p-4 text-[13px] text-destructive-active">
+              This device cannot be sanitized in place. Physical destruction is required; no software erase job can be submitted.
+            </div>
+          )}
           <p className="mt-2 text-[14px] text-body">{effectivePlan.justification}</p>
           {effectivePlan.limitations && (
             <div className="mt-4 rounded border border-warning/30 bg-warning-soft p-4">
@@ -312,7 +332,7 @@ export function EraseWizard({ initialDeviceId }: { initialDeviceId?: string }) {
           <Button
             variant="destructive"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || effectivePlan?.method === "DESTROY"}
           >
             {submitting ? "Submitting…" : "Submit erasure job"}
           </Button>
