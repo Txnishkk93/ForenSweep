@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { Button } from "@/components/Button";
-import { downloadCertificate, getCertificate, verifyCertificate } from "@/lib/backend-api";
+import { downloadCertificate, downloadCertificateExport, getCertificate, verifyCertificate } from "@/lib/backend-api";
 import { ApiError } from "@/lib/api-client";
 import type { Certificate } from "@/lib/types";
 import { eraseMethodLabel } from "@/lib/status-colors";
@@ -16,6 +16,7 @@ export default function CertificateDetailPage({
   const [cert, setCert] = useState<Certificate | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadState, setDownloadState] = useState<"idle" | "downloading">("idle");
+  const [exportState, setExportState] = useState<"idle" | "downloading">("idle");
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "valid" | "invalid">(
     "idle",
   );
@@ -72,6 +73,27 @@ export default function CertificateDetailPage({
       else setError("Could not download certificate. Try again.");
     } finally {
       setDownloadState("idle");
+    }
+  }
+
+  async function handleExportDownload() {
+    if (!cert) return;
+    setExportState("downloading");
+    setError(null);
+    try {
+      const blob = await downloadCertificateExport(cert.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `forensweep-certificate-${cert.id}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not export certificate.");
+    } finally {
+      setExportState("idle");
     }
   }
 
@@ -146,6 +168,9 @@ export default function CertificateDetailPage({
         </Button>
         <Button variant="secondary" onClick={handleDownload} disabled={downloadState === "downloading"}>
           {downloadState === "downloading" ? "Downloading..." : "Download PDF"}
+        </Button>
+        <Button variant="secondary" onClick={handleExportDownload} disabled={exportState === "downloading"}>
+          {exportState === "downloading" ? "Exporting..." : "Download JSON export"}
         </Button>
       </div>
 
