@@ -30,6 +30,7 @@ export default function NewRecoveryPage() {
   const [uploadedCertificate, setUploadedCertificate] = useState<{ payload: Record<string, unknown>; contentHash: string; signature: string } | undefined>();
   const [certificateUploadState, setCertificateUploadState] = useState<"idle" | "dragging" | "parsing" | "valid" | "mismatched" | "invalid" | "unparseable">("idle");
   const [certificateUploadMessage, setCertificateUploadMessage] = useState<string | null>(null);
+  const [pendingCertificateFile, setPendingCertificateFile] = useState<File | null>(null);
   const certificateInputRef = useRef<HTMLInputElement>(null);
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
@@ -48,6 +49,13 @@ export default function NewRecoveryPage() {
     const certificate = certificates.find((item) => item.id === authorizationCertificateId);
     if (certificate?.targetDeviceId) setAcquisitionId(certificate.targetDeviceId);
   }, [authorizationCertificateId, certificates]);
+
+  useEffect(() => {
+    if (!acquisitionId || !pendingCertificateFile) return;
+    const file = pendingCertificateFile;
+    setPendingCertificateFile(null);
+    void parseCertificateFile(file);
+  }, [acquisitionId, pendingCertificateFile]);
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -73,7 +81,12 @@ export default function NewRecoveryPage() {
     setCertificateUploadMessage(null);
     setUploadedCertificate(undefined);
     try {
-      if (!acquisitionId) throw new Error("Select the recovery source before uploading a certificate.");
+      if (!acquisitionId) {
+        setPendingCertificateFile(file);
+        setCertificateUploadState("idle");
+        setCertificateUploadMessage("Certificate selected. Choose a recovery source to verify it against this target.");
+        return;
+      }
       let parsed: { payload: Record<string, unknown>; contentHash: string; signature: string };
       if (file.name.toLowerCase().endsWith(".json")) {
         parsed = JSON.parse(await file.text()) as typeof parsed;
