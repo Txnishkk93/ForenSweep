@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
-import { downloadRecoveredFile, getJob, getRecoveredFiles } from "@/lib/backend-api";
+import { downloadRecoveredFile, exportRecoveredFile, getJob, getRecoveredFiles } from "@/lib/backend-api";
 import { saveBytesToDisk } from "@/lib/save-file";
 import { confidenceTone, formatBytes } from "@/lib/status-colors";
 import type { RecoveredFile } from "@/lib/types";
@@ -28,11 +28,27 @@ function ScoreBar({ label, value }: { label: string; value: number | undefined }
   );
 }
 
-function FileRow({ file, onExport }: { file: RecoveredFile; onExport: (file: RecoveredFile) => void }) {
+function FileRow({
+  file,
+  selected,
+  onSelect,
+  onExport,
+}: {
+  file: RecoveredFile;
+  selected: boolean;
+  onSelect: (file: RecoveredFile) => void;
+  onExport: (file: RecoveredFile) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="border-b border-hairline last:border-0">
       <div className="flex items-center gap-4 px-5 py-4">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onSelect(file)}
+          aria-label={`Select ${file.fileName ?? "recovered file"}`}
+        />
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-canvas-soft border border-hairline text-[11px] font-medium uppercase text-body-muted">
           {file.fileType}
         </div>
@@ -103,6 +119,8 @@ export default function RecoveryJobDetailPage({
   params: { jobId: string };
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportProgress, setExportProgress] = useState<string | null>(null);
   const jobQuery = useQuery({
     queryKey: ["job", params.jobId],
     queryFn: () => getJob(params.jobId),
@@ -125,11 +143,36 @@ export default function RecoveryJobDetailPage({
 
   async function handleExport(file: RecoveredFile) {
     setError(null);
+    setExportProgress(`Exporting ${file.fileName ?? "recovered file"}...`);
     try {
+      await exportRecoveredFile(file.id);
       const blob = await downloadRecoveredFile(params.jobId, file.id);
       await saveBytesToDisk(file.fileName ?? `recovered-${file.id}`, blob);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to export recovered file.");
+    } finally {
+      setExportProgress(null);
+    }
+  }
+
+  async function handleBulkExport() {
+    const filesToExport = selectedIds.size
+      ? files.filter((file) => selectedIds.has(file.id))
+      : files;
+    if (!filesToExport.length) return;
+    setError(null);
+    try {
+      for (const [index, file] of filesToExport.entries()) {
+        setExportProgress(`Exporting ${index + 1} of ${filesToExport.length}...`);
+        await exportRecoveredFile(file.id);
+        const blob = await downloadRecoveredFile(params.jobId, file.id);
+        await saveBytesToDisk(file.fileName ?? `recovered-${file.id}`, blob);
+      }
+      setSelectedIds(new Set());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to export recovered files.");
+    } finally {
+      setExportProgress(null);
     }
   }
 
@@ -149,6 +192,7 @@ export default function RecoveryJobDetailPage({
       />
 
       {displayError && <p className="mb-6 text-sm text-destructive-active">{displayError}</p>}
+      {exportProgress && <p className="mb-6 text-sm text-body-muted" role="status">{exportProgress}</p>}
 
       <DataCard className="mb-6 border-recovery/30 bg-recovery-soft">
         <p className="text-[13px] text-recovery">
@@ -159,8 +203,38 @@ export default function RecoveryJobDetailPage({
       </DataCard>
 
       <DataCard className="p-0">
+        <div className="flex items-center justify-between border-b border-hairline px-5 py-3">
+          <label className="flex items-center gap-2 text-[12px] text-body-muted">
+            <input
+              type="checkbox"
+              checked={Boolean(files.length) && selectedIds.size === files.length}
+              onChange={() => setSelectedIds(selectedIds.size === files.length ? new Set() : new Set(files.map((file) => file.id)))}
+              aria-label="Select all recovered files"
+            />
+            {selectedIds.size ? `${selectedIds.size} selected` : `${files.length} files`}
+          </label>
+          <Button
+            variant="secondary"
+            className="px-3 py-1.5 text-[13px]"
+            onClick={handleBulkExport}
+            disabled={!files.length || Boolean(exportProgress)}
+          >
+            {selectedIds.size ? "Export selected" : "Export all"}
+          </Button>
+        </div>
         {files.map((f) => (
-          <FileRow key={f.id} file={f} onExport={handleExport} />
+          <FileRow
+            key={f.id}
+            file={f}
+            selected={selectedIds.has(f.id)}
+            onSelect={(file) => setSelectedIds((current) => {
+              const next = new Set(current);
+              if (next.has(file.id)) next.delete(file.id);
+              else next.add(file.id);
+              return next;
+            })}
+            onExport={handleExport}
+          />
         ))}
       </DataCard>
     </div>

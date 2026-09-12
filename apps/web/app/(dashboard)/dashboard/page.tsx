@@ -261,7 +261,7 @@ export default function DashboardPage() {
                     Sanitize a device or specific files
                   </p>
                 </div>
-                <span className="shrink-0 rounded-md border border-destructive-active/30 px-[13px] py-[5px] text-xs font-semibold tracking-[0.01em] text-destructive-active">
+                <span className="shrink-0 rounded-md border bg-ink px-[13px] py-[5px] text-xs font-semibold tracking-[0.01em] text-white">
                   Start
                 </span>
               </Link>

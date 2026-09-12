@@ -73,7 +73,7 @@ export function DeviceFileBrowser({
               onKeyDown={(event) => {
                 if (event.key === "Enter" && entry.type === "directory") setPath(entry.path);
               }}
-              onDoubleClick={() => entry.type === "directory" && setPath(entry.path)}
+              onClick={() => entry.type === "directory" && setPath(entry.path)}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-white"
             >
               <input
@@ -86,7 +86,10 @@ export function DeviceFileBrowser({
               <Icon className="h-4 w-4 shrink-0 text-body-muted" aria-hidden="true" />
               <button
                 type="button"
-                onClick={() => entry.type === "directory" && setPath(entry.path)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (entry.type === "directory") setPath(entry.path);
+                }}
                 className="min-w-0 flex-1 truncate text-left text-[13px] text-ink hover:underline"
               >
                 {entry.name}
