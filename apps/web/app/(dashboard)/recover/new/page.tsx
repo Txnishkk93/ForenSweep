@@ -186,12 +186,12 @@ export default function NewRecoveryPage() {
           Recovery only runs against a bit-for-bit forensic image whose hash
           has been verified — never against a live device directly.
         </p>
-        <label className="mb-3 block rounded border border-dashed border-recovery/50 bg-recovery-soft p-4 text-sm text-ink">
+        <label className="mb-3 block rounded border border-dashed border-recovery/50 bg-recovery-soft px-3 py-2.5 text-sm text-ink">
           <span className="font-medium">Upload a forensic image or ZIP test set</span>
-          <input className="mt-2 block w-full text-sm" type="file" accept=".img,.zip" onChange={handleFileSelect} disabled={uploading} />
-          <span className="mt-1 block text-xs text-body-muted">Maximum upload size: 500MB</span>
+          <input className="mt-1 block max-w-full text-sm" type="file" accept=".img,.zip" onChange={handleFileSelect} disabled={uploading} />
+          <span className="mt-0.5 block text-xs text-body-muted">Maximum upload size: 500MB</span>
           {uploading && (
-            <div className="mt-3">
+            <div className="mt-2">
               <div className="mb-1 flex justify-between text-xs text-body-muted"><span>Uploading</span><span>{uploadProgress}%</span></div>
               <progress className="h-2 w-full accent-recovery" max="100" value={uploadProgress} />
             </div>
@@ -216,7 +216,7 @@ export default function NewRecoveryPage() {
                     type="button"
                     disabled={Boolean(a.mounted || a.isSystemDisk)}
                     onClick={() => setAcquisitionId(a.id)}
-                    className={"flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === a.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
+                    className={"flex w-full items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === a.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
                   >
                     <div>
                       <MonoText>{a.path}</MonoText>
@@ -230,7 +230,7 @@ export default function NewRecoveryPage() {
                     key={image.id}
                     type="button"
                     onClick={() => setAcquisitionId(image.id)}
-                    className={"flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === image.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
+                    className={"flex w-full items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === image.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
                   >
                     <div>
                       <p className="text-[14px] font-medium text-ink">{image.filename}</p>
