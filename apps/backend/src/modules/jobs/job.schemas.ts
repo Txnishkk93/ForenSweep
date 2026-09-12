@@ -5,7 +5,7 @@ export const jobIdParamsSchema = z.object({ id: z.uuid() });
 
 export const createEraseJobSchema = z
   .object({
-    deviceId: z.uuid(),
+    deviceId: z.uuid().optional(),
     eraseScope: eraseScopeSchema,
     requestedMethod: eraseMethodSchema.optional(),
     standard: z.enum(["NIST_800_88", "DOD_5220_22_M"]).optional(),
@@ -22,7 +22,11 @@ export const createEraseJobSchema = z
         ? Boolean(value.eraseFileList?.length)
         : !value.eraseFileList?.length,
     { message: "eraseFileList must match eraseScope", path: ["eraseFileList"] },
-  );
+  )
+  .refine((value) => value.eraseScope === "SPECIFIC_FILES" || Boolean(value.deviceId), {
+    message: "deviceId is required for whole-device erasure",
+    path: ["deviceId"],
+  });
 
 export const createRecoveryJobSchema = z
   .object({

@@ -32,6 +32,7 @@ import {
   internalCertificateRoutes,
 } from "./modules/certificates/certificate.routes.js";
 import { acquisitionRoutes } from "./modules/acquisitions/acquisition.routes.js";
+import { filesystemRoutes } from "./modules/filesystem/filesystem.routes.js";
 
 export function createApp(
   options: {
@@ -74,6 +75,7 @@ export function createApp(
       ? createDeviceRoutes(options.deviceStore)
       : deviceRoutes,
   );
+  app.use("/api/fs", filesystemRoutes);
   app.use(
     "/api/jobs",
     options.deviceStore

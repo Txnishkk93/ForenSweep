@@ -6,6 +6,7 @@ import type {
   Certificate,
   Device,
   DeviceBrowseResponse,
+  FsBrowseResponse,
   EraseMethod,
   Job,
   RecoveredFile,
@@ -83,6 +84,11 @@ export async function browseDevice(deviceId: string, path?: string): Promise<Dev
   return apiFetch<DeviceBrowseResponse>(`/api/devices/${deviceId}/browse${query}`);
 }
 
+export async function browseLocalFs(path?: string): Promise<FsBrowseResponse> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return apiFetch<FsBrowseResponse>(`/api/fs/browse${query}`);
+}
+
 export function profileToPlan(profile: DeviceProfileResponse): SanitizationPlan {
   const purgeMethods: EraseMethod[] = [
     "ATA_SECURE_ERASE",
@@ -141,7 +147,7 @@ export async function approveJob(jobId: string): Promise<Job> {
 }
 
 export async function createEraseJob(input: {
-  deviceId: string;
+  deviceId?: string;
   eraseScope: "WHOLE_DRIVE" | "SPECIFIC_FILES";
   requestedMethod?: EraseMethod;
   standard?: "NIST_800_88" | "DOD_5220_22_M";

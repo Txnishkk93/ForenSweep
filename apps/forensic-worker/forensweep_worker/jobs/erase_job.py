@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover - real hardware is Linux-only
 from threading import Event, Lock
 from ..device_discovery import discover_devices
 from ..erase.hardware import overwrite_usb_device
+from ..erase.local_files import expand_targets, remove_empty_directories, secure_overwrite_file
 
 _REAL_HARDWARE_LOCK = Lock()
 _LOGGER = logging.getLogger("forensweep.hardware")
@@ -50,6 +51,9 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
     if detail.get("hardware") is True:
         run_hardware_erase(job_id, config, client, context_data)
         return
+    if job.get("eraseScope") == "SPECIFIC_FILES" and not device:
+        run_local_file_erase(job_id, config, client, context_data)
+        return
     raw_path = job.get("sourceImagePath") or (device or {}).get("path")
     if not isinstance(raw_path, str):
         raise ValueError("Worker context does not contain a managed image reference")
@@ -67,6 +71,49 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
     if verification.verified:
         certificate = create_certificate(context_data, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "details": verification.details}, config, started_at)
         client.certificate(certificate)
+
+
+def run_local_file_erase(
+    job_id: str, config: Config, client: WorkerApiClient, context_data: dict[str, Any]
+) -> None:
+    started_at = datetime.now(timezone.utc)
+    job = context_data["job"]
+    raw_targets = job.get("eraseFileList") or []
+    if not isinstance(raw_targets, list) or not all(isinstance(item, str) for item in raw_targets):
+        raise ValueError("Worker context does not contain a valid local erase target list")
+    passes = int(job.get("totalPasses") or (3 if job.get("eraseMethod") == "OVERWRITE_MULTI" else 1))
+    erased: list[str] = []
+    failures: list[dict[str, str]] = []
+    directories = [item for item in raw_targets if isinstance(item, str)]
+    targets: list[Path] = []
+    seen_targets: set[Path] = set()
+    for raw_target in raw_targets:
+        try:
+            for target in expand_targets([raw_target]):
+                if target not in seen_targets:
+                    seen_targets.add(target)
+                    targets.append(target)
+        except Exception as error:
+            failures.append({"path": raw_target, "error": str(error)})
+    total = len(targets)
+    client.audit(job_id, {"action": "LOCAL_FILE_ERASE_STARTED", "detail": {"paths": raw_targets, "fileCount": total}})
+    for index, path in enumerate(targets, start=1):
+        try:
+            secure_overwrite_file(path, passes, config.chunk_size, lambda current, total_passes: client.progress(job_id, {"stage": "OVERWRITING", "progress": round(((index - 1) + current / total_passes) / max(total, 1) * 100), "currentPass": current, "totalPasses": total_passes, "progressDetail": {"localFiles": True, "currentPath": str(path), "filesProcessed": index - 1, "filesTotal": total}}))
+            erased.append(str(path))
+            client.audit(job_id, {"action": "LOCAL_FILE_ERASED", "detail": {"path": str(path), "passes": passes}})
+        except Exception as error:
+            failure = {"path": str(path), "error": str(error)}
+            failures.append(failure)
+            client.audit(job_id, {"action": "LOCAL_FILE_ERASE_FAILED", "detail": failure})
+    remove_empty_directories(directories)
+    details = {"localFiles": True, "requestedPaths": raw_targets, "erasedPaths": erased, "failures": failures}
+    if failures:
+        client.fail(job_id, {"message": f"{len(failures)} local erase target(s) failed", "errorCode": "LOCAL_FILE_ERASE_FAILED"})
+        return
+    client.complete(job_id, {"verified": True, "residualRiskScore": 0.25, "residualRiskLevel": "HIGH", "verificationData": details})
+    certificate = create_certificate(context_data, {"verified": True, "residualRiskScore": 0.25, "residualRiskLevel": "HIGH", "details": details}, config, started_at)
+    client.certificate(certificate)
 
 
 def run_hardware_erase(

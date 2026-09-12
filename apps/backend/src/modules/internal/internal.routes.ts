@@ -94,6 +94,7 @@ export function createInternalRoutes(
             eraseMethod: job.eraseMethod,
             eraseScope: job.eraseScope,
             standard: job.standard,
+            eraseFileList: serialize(job.eraseFileList),
             progressDetail: serialize(job.progressDetail),
             userId: job.userId,
             approvedById: job.approvedById,
