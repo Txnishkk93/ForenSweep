@@ -1,0 +1,2 @@
+2026-09-12 18:01:02,345 ERROR safety_gate target=testing/real-data decision=failed error=Could not resolve a physical disk and serial behind testing\real-data
+2026-09-12 18:02:27,106 ERROR safety_gate target=testing/real-data decision=failed error=Could not resolve a physical disk and serial behind testing\real-data

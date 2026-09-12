@@ -1,0 +1,7 @@
+[
+  {"id": "E1_targeted_sensitive", "type": "erase", "device_id": "", "erase_scope": "SPECIFIC_FILES", "paths": ["sensitive/pii"]},
+  {"id": "E2_whole_drive_dod", "type": "erase", "device_id": "", "erase_scope": "WHOLE_DRIVE", "standard": "DOD_5220_22_M"},
+  {"id": "R1_quick_scan_all", "type": "recovery", "device_id": "", "scan_type": "QUICK"},
+  {"id": "R2_deep_scan_images_docs", "type": "recovery", "device_id": "", "scan_type": "DEEP"},
+  {"id": "R3_post_wipe_negative", "type": "recovery", "after_erase_id": "E1_targeted_sensitive", "device_id": "", "scan_type": "DEEP"}
+]

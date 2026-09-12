@@ -1,0 +1,17 @@
+{
+  "root": "TEST_VOLUME",
+  "folders": [
+    {"path": "documents/reports", "files": 20, "types": ["pdf", "docx", "xlsx"], "size_range_kb": [50, 2000]},
+    {"path": "documents/logs", "files": 50, "types": ["log", "txt"], "size_range_kb": [10, 500]},
+    {"path": "code/project", "files": 40, "types": ["js", "ts", "py", "json", "md"], "size_range_kb": [5, 300]},
+    {"path": "media/photos", "files": 30, "types": ["jpg", "png"], "size_range_kb": [200, 8000]},
+    {"path": "media/videos", "files": 5, "types": ["mp4"], "size_range_kb": [50000, 300000]},
+    {"path": "archives", "files": 10, "types": ["zip"], "size_range_kb": [1000, 50000]},
+    {"path": "sensitive/pii", "files": 15, "types": ["csv", "txt"], "size_range_kb": [10, 200], "synthetic_pii": true}
+  ],
+  "delete_patterns": [
+    {"folder": "documents/logs", "pattern": "*.log", "percent": 60},
+    {"folder": "media/photos", "pattern": "*.jpg", "percent": 40},
+    {"folder": "sensitive/pii", "pattern": "*", "percent": 80}
+  ]
+}
