@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { createRecoveryJob, getAvailableImages, getCertificates, getDevices, uploadAcquisition } from "@/lib/backend-api";
+import { authorizeRecoveryCertificate, auditRecoveryCertificateUpload, createRecoveryJob, getAvailableImages, getCertificates, getDevices, uploadAcquisition } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
 import type { Certificate } from "@/lib/types";
 
@@ -26,10 +26,14 @@ export default function NewRecoveryPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [authorizationCertificateId, setAuthorizationCertificateId] = useState("");
-  const [pastedCertificate, setPastedCertificate] = useState("");
+  const [uploadedCertificate, setUploadedCertificate] = useState<{ payload: Record<string, unknown>; contentHash: string; signature: string } | undefined>();
+  const [certificateUploadState, setCertificateUploadState] = useState<"idle" | "dragging" | "parsing" | "valid" | "mismatched" | "invalid" | "unparseable">("idle");
+  const [certificateUploadMessage, setCertificateUploadMessage] = useState<string | null>(null);
+  const certificateInputRef = useRef<HTMLInputElement>(null);
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
+  const recoveryTarget = acquisition ? { deviceId: acquisition.id } : acquisitionId ? { imageId: acquisitionId } : {};
 
   useEffect(() => {
     const certificateId = new URLSearchParams(window.location.search).get("certificateId");
@@ -46,19 +50,11 @@ export default function NewRecoveryPage() {
     setError(null);
     try {
       if (!acquisitionId) throw new Error("Select an acquisition first.");
-      let certificateVerification: { payload: Record<string, unknown>; contentHash: string; signature: string } | undefined;
-      if (pastedCertificate.trim()) {
-        try {
-          certificateVerification = JSON.parse(pastedCertificate) as typeof certificateVerification;
-        } catch {
-          throw new Error("Certificate paste must be valid JSON containing payload, contentHash, and signature.");
-        }
-      }
       const job = await createRecoveryJob({
         ...(acquisition ? { deviceId: acquisition.id } : { imageId: acquisitionId }),
         scanType: scanType.toUpperCase() as "QUICK" | "DEEP",
         ...(authorizationCertificateId ? { certificateId: authorizationCertificateId } : {}),
-        ...(certificateVerification ? { certificateVerification } : {}),
+        ...(uploadedCertificate ? { certificateVerification: uploadedCertificate } : {}),
       });
       router.push(`/recover/${job.id}`);
     } catch (requestError) {
@@ -66,6 +62,63 @@ export default function NewRecoveryPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function parseCertificateFile(file: File) {
+    setCertificateUploadState("parsing");
+    setCertificateUploadMessage(null);
+    setUploadedCertificate(undefined);
+    try {
+      if (!acquisitionId) throw new Error("Select the recovery source before uploading a certificate.");
+      let parsed: { payload: Record<string, unknown>; contentHash: string; signature: string };
+      if (file.name.toLowerCase().endsWith(".json")) {
+        parsed = JSON.parse(await file.text()) as typeof parsed;
+      } else if (file.name.toLowerCase().endsWith(".pdf")) {
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+        const attachments = await pdf.getAttachments();
+        const attachmentValues = (attachments instanceof Map ? [...attachments.values()] : Object.values(attachments ?? {})) as Array<{ filename?: string; content?: Uint8Array }>;
+        const attachment = attachmentValues.find((item) => item.filename === "forensweep-certificate.json" && item.content);
+        if (attachment?.content) {
+          parsed = JSON.parse(new TextDecoder().decode(attachment.content)) as typeof parsed;
+        } else {
+          const metadata = await pdf.getMetadata();
+          const info = metadata.info as Record<string, unknown>;
+          const subject = typeof info.Subject === "string" ? info.Subject : "";
+          const encoded = subject.startsWith("ForenSweep-Certificate:") ? subject.slice("ForenSweep-Certificate:".length) : "";
+          if (!encoded) throw new Error("No certificate export was found in this PDF.");
+          parsed = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0)))) as typeof parsed;
+        }
+      } else {
+        throw new Error("Unsupported certificate file type.");
+      }
+      if (!parsed?.payload || typeof parsed.contentHash !== "string" || typeof parsed.signature !== "string") {
+        throw new Error("The file does not contain a certificate export.");
+      }
+      const result = await authorizeRecoveryCertificate({ certificate: parsed, target: recoveryTarget });
+      if (result.state === "VALID") {
+        setUploadedCertificate(parsed);
+        setCertificateUploadState("valid");
+        setCertificateUploadMessage(`Certificate verified — ${result.targetDisplayName ?? "target"} sanitized on ${result.issuedAt ? new Date(result.issuedAt).toLocaleDateString() : "the recorded date"}.`);
+      } else if (result.state === "MISMATCHED") {
+        setCertificateUploadState("mismatched");
+        setCertificateUploadMessage("This certificate is valid, but was issued for a different item — it can't authorize recovery of the current target.");
+      } else {
+        setCertificateUploadState("invalid");
+        setCertificateUploadMessage("This file could not be verified as an authentic ForenSweep certificate — signature does not match.");
+      }
+    } catch (uploadError) {
+      setCertificateUploadState("unparseable");
+      setCertificateUploadMessage(uploadError instanceof Error && uploadError.message.startsWith("Select the recovery") ? uploadError.message : "This doesn't look like a certificate export — upload the .json or .pdf you downloaded from the Certificates page.");
+      await auditRecoveryCertificateUpload({ outcome: "UNPARSEABLE", target: recoveryTarget, reason: uploadError instanceof Error ? uploadError.message : "parse_failed" }).catch(() => undefined);
+    }
+  }
+
+  function handleCertificateDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setCertificateUploadState((state) => state === "dragging" ? "idle" : state);
+    const file = event.dataTransfer.files[0];
+    if (file) void parseCertificateFile(file);
   }
 
   async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
@@ -195,7 +248,12 @@ export default function NewRecoveryPage() {
         </p>
         <select
           value={authorizationCertificateId}
-          onChange={(event) => setAuthorizationCertificateId(event.target.value)}
+          onChange={(event) => {
+            setAuthorizationCertificateId(event.target.value);
+            setUploadedCertificate(undefined);
+            setCertificateUploadState("idle");
+            setCertificateUploadMessage(null);
+          }}
           className="w-full rounded border border-hairline-strong bg-surface-card px-3 py-2 text-sm text-ink"
         >
           <option value="">No certificate selected</option>
@@ -205,12 +263,26 @@ export default function NewRecoveryPage() {
             </option>
           ))}
         </select>
-        <textarea
-          value={pastedCertificate}
-          onChange={(event) => setPastedCertificate(event.target.value)}
-          placeholder='Paste certificate JSON: {"payload":...,"contentHash":"...","signature":"..."}'
-          className="mt-3 min-h-24 w-full rounded border border-hairline-strong bg-surface-card px-3 py-2 font-mono text-[11px] text-ink"
-        />
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload certificate JSON or PDF"
+          onClick={() => certificateInputRef.current?.click()}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") certificateInputRef.current?.click(); }}
+          onDragEnter={(event) => { event.preventDefault(); setCertificateUploadState("dragging"); }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={() => setCertificateUploadState((state) => state === "dragging" ? "idle" : state)}
+          onDrop={handleCertificateDrop}
+          className={`mt-3 flex min-h-24 cursor-pointer items-center justify-center rounded border border-dashed p-4 text-center text-sm ${certificateUploadState === "dragging" ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft"}`}
+        >
+          <input ref={certificateInputRef} className="sr-only" type="file" accept=".json,.pdf,application/json,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void parseCertificateFile(file); }} />
+          {certificateUploadState === "parsing" ? "Parsing and verifying certificate…" : certificateUploadState === "dragging" ? "Drop certificate file here" : "Drop certificate file here, or click to browse — .json or .pdf"}
+        </div>
+        {certificateUploadMessage && (
+          <p className={`mt-3 rounded border p-3 text-[13px] ${certificateUploadState === "valid" ? "border-success/30 bg-success-soft text-success" : certificateUploadState === "mismatched" ? "border-warning/30 bg-warning-soft text-warning" : "border-destructive/30 bg-destructive-soft text-destructive-active"}`} role="status">
+            {certificateUploadState === "valid" ? "✓ " : ""}{certificateUploadMessage}
+          </p>
+        )}
       </DataCard>
 
       {(error || sourceError) && <p className="mb-4 text-[13px] text-destructive-active">{error ?? (sourceError instanceof Error ? sourceError.message : "Unable to load acquisitions.")}</p>}
@@ -243,7 +315,7 @@ export default function NewRecoveryPage() {
       <Button
         variant="recovery"
         onClick={handleSubmit}
-        disabled={!acquisitionId || blocked || submitting}
+        disabled={!acquisitionId || blocked || submitting || ["parsing", "mismatched", "invalid", "unparseable"].includes(certificateUploadState)}
       >
         {submitting ? "Starting scan…" : "Start recovery scan"}
       </Button>

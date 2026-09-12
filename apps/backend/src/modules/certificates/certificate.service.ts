@@ -14,6 +14,7 @@ import type {
 } from "./certificate.schemas.js";
 import { cacheKeys, getCachedOrFetch } from "../../lib/cache.js";
 import path from "node:path";
+import { resolveAvailableImage } from "../acquisitions/acquisition.service.js";
 
 export type CertificateStore = Pick<
   typeof prisma,
@@ -278,4 +279,89 @@ export async function verifyCertificate(
         ? "Certificate payload hash does not match contentHash"
         : "Ed25519 signature is invalid or public key is unavailable",
   };
+}
+
+export async function authorizeRecoveryCertificate(
+  input: z.infer<typeof import("./certificate.schemas.js").authorizeRecoveryCertificateSchema>,
+  userId: string,
+  store: CertificateStore = prisma,
+) {
+  const verification = await verifyCertificate(input.certificate, userId, store);
+  if (!verification.valid) {
+    await auditRecoveryUpload(
+      {
+        outcome: "INVALID",
+        target: input.target,
+        reason: verification.signatureValid ? "CERTIFICATE_HASH_INVALID" : "CERTIFICATE_SIGNATURE_INVALID",
+      },
+      userId,
+      store,
+    );
+    return { state: verification.signatureValid ? "INVALID" : "INVALID", verification } as const;
+  }
+  const sourcePath = input.target.imageId
+    ? await resolveAvailableImage(input.target.imageId)
+    : undefined;
+  const originatingJob = await store.job.findUnique({
+    where: { id: input.certificate.payload.jobId },
+    include: { device: true },
+  });
+  if (!originatingJob || originatingJob.type !== "ERASE" || originatingJob.status !== "COMPLETED" || !originatingJob.verified) {
+    await auditRecoveryUpload(
+      { outcome: "MISMATCHED", target: input.target, reason: "CERTIFICATE_TARGET_MISMATCH" },
+      userId,
+      store,
+    );
+    return { state: "MISMATCHED", verification } as const;
+  }
+  const payload = input.certificate.payload as Record<string, unknown>;
+  const deviceMatches = input.target.deviceId !== undefined
+    && originatingJob.deviceId === input.target.deviceId;
+  const imageMatches = sourcePath !== undefined
+    && (originatingJob.sourceImagePath === sourcePath
+      || (payload.deviceSnapshot as Record<string, unknown> | undefined)?.path === sourcePath);
+  const matches = Boolean(originatingJob && (deviceMatches || imageMatches));
+  if (!matches) {
+    await auditRecoveryUpload(
+      { outcome: "MISMATCHED", target: input.target, reason: "CERTIFICATE_TARGET_MISMATCH" },
+      userId,
+      store,
+    );
+    return { state: "MISMATCHED", verification } as const;
+  }
+  const localCertificate = await store.certificate.findUnique({
+    where: { jobId: originatingJob.id },
+    include: { job: { include: { device: true } } },
+  });
+  await auditRecoveryUpload(
+    { outcome: "VALID", certificateId: localCertificate?.id ?? null, target: input.target },
+    userId,
+    store,
+  );
+  return {
+    state: "VALID",
+    verification,
+    certificateId: localCertificate?.id,
+    targetDisplayName: localCertificate
+      ? certificateDisplayData(localCertificate, localCertificate.job).targetDisplayName
+      : typeof payload.targetDisplayName === "string" ? payload.targetDisplayName : "Sanitized target",
+    issuedAt: originatingJob.finishedAt?.toISOString() ?? originatingJob.createdAt.toISOString(),
+  } as const;
+}
+
+export async function auditRecoveryUpload(
+  input: z.infer<typeof import("./certificate.schemas.js").recoveryUploadAuditSchema>,
+  userId: string,
+  store: CertificateStore = prisma,
+) {
+  return appendAuditEvent(store, {
+    userId,
+    action: "RECOVERY_CERTIFICATE_UPLOAD",
+    detail: {
+      outcome: input.outcome,
+      certificateId: input.certificateId ?? null,
+      target: input.target as Prisma.InputJsonObject,
+      reason: input.reason ?? null,
+    },
+  });
 }

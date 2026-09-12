@@ -17,10 +17,14 @@ import {
   listCertificatesForTarget,
   persistCertificate,
   verifyCertificate,
+  authorizeRecoveryCertificate,
+  auditRecoveryUpload,
 } from "./certificate.service.js";
 import {
   internalCertificateSchema,
   verifyCertificateSchema,
+  authorizeRecoveryCertificateSchema,
+  recoveryUploadAuditSchema,
 } from "./certificate.schemas.js";
 
 const idSchema = z.object({ id: z.uuid() });
@@ -138,6 +142,27 @@ certificateRoutes.post(
   validateBody(verifyCertificateSchema),
   asyncHandler(async (req, res) =>
     sendSuccess(res, await verifyCertificate(req.body, req.auth!.userId), 200, {
+      requestId: req.requestId,
+    }),
+  ),
+);
+certificateRoutes.post(
+  "/certificates/authorize-recovery",
+  validateBody(authorizeRecoveryCertificateSchema),
+  asyncHandler(async (req, res) =>
+    sendSuccess(
+      res,
+      await authorizeRecoveryCertificate(req.body, req.auth!.userId),
+      200,
+      { requestId: req.requestId },
+    ),
+  ),
+);
+certificateRoutes.post(
+  "/certificates/recovery-upload-audit",
+  validateBody(recoveryUploadAuditSchema),
+  asyncHandler(async (req, res) =>
+    sendSuccess(res, await auditRecoveryUpload(req.body, req.auth!.userId), 201, {
       requestId: req.requestId,
     }),
   ),

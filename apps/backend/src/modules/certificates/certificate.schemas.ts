@@ -37,3 +37,18 @@ export const verifyCertificateSchema = z.object({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   signature: z.string().min(1),
 });
+
+export const authorizeRecoveryCertificateSchema = z.object({
+  certificate: verifyCertificateSchema,
+  target: z.object({
+    deviceId: z.uuid().optional(),
+    imageId: z.uuid().optional(),
+  }),
+});
+
+export const recoveryUploadAuditSchema = z.object({
+  outcome: z.enum(["VALID", "INVALID", "MISMATCHED", "UNPARSEABLE"]),
+  certificateId: z.uuid().nullable().optional(),
+  target: z.record(z.string(), z.unknown()).default({}),
+  reason: z.string().max(200).optional(),
+});

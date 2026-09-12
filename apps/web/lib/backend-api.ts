@@ -224,6 +224,36 @@ export async function verifyCertificate(certificate: Certificate): Promise<{ val
   });
 }
 
+export type RecoveryCertificateCheck = {
+  state: "VALID" | "INVALID" | "MISMATCHED";
+  verification: { valid: boolean; hashValid: boolean; signatureValid: boolean };
+  certificateId?: string;
+  targetDisplayName?: string;
+  issuedAt?: string;
+};
+
+export async function authorizeRecoveryCertificate(input: {
+  certificate: { payload: Record<string, unknown>; contentHash: string; signature: string };
+  target: { deviceId?: string; imageId?: string };
+}): Promise<RecoveryCertificateCheck> {
+  return apiFetch<RecoveryCertificateCheck>("/api/certificates/authorize-recovery", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function auditRecoveryCertificateUpload(input: {
+  outcome: "VALID" | "INVALID" | "MISMATCHED" | "UNPARSEABLE";
+  certificateId?: string | null;
+  target: Record<string, unknown>;
+  reason?: string;
+}): Promise<void> {
+  await apiFetch("/api/certificates/recovery-upload-audit", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function getCertificatesFromJobs(jobs: Job[]): Promise<Certificate[]> {
   const certificates = await Promise.all(
     jobs
