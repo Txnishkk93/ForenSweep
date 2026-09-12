@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",
     "clsx": "2.1.1",
+    "fflate": "^0.8.3",
     "lucide-react": "^1.45.0",
     "next": "14.2.35",
     "pdfjs-dist": "^6.3.289",

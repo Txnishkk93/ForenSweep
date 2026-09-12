@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { zipSync } from "fflate";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -32,6 +33,7 @@ export default function NewRecoveryPage() {
   const [certificateUploadMessage, setCertificateUploadMessage] = useState<string | null>(null);
   const [pendingCertificateFile, setPendingCertificateFile] = useState<File | null>(null);
   const certificateInputRef = useRef<HTMLInputElement>(null);
+  const directoryInputRef = useRef<HTMLInputElement>(null);
 
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
@@ -43,6 +45,10 @@ export default function NewRecoveryPage() {
   useEffect(() => {
     const certificateId = new URLSearchParams(window.location.search).get("certificateId");
     if (certificateId) setAuthorizationCertificateId(certificateId);
+  }, []);
+
+  useEffect(() => {
+    directoryInputRef.current?.setAttribute("webkitdirectory", "");
   }, []);
 
   useEffect(() => {
@@ -138,17 +144,34 @@ export default function NewRecoveryPage() {
     if (file) void parseCertificateFile(file);
   }
 
-  async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  async function handleSourceSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) return;
+    if (!files.length) return;
+    const firstFile = files[0];
+    if (!firstFile) return;
     setUploading(true);
     setUploadProgress(0);
     setError(null);
     try {
-      const result = await uploadAcquisition(file, setUploadProgress);
+      const isSingleImage = files.length === 1 && /\.(img|zip)$/i.test(firstFile.name);
+      const entries: Record<string, Uint8Array> = {};
+      if (!isSingleImage) {
+        for (const file of files) {
+          entries[file.webkitRelativePath || file.name] = new Uint8Array(await file.arrayBuffer());
+        }
+      }
+      const upload = isSingleImage
+        ? firstFile
+        : new File(
+            [zipSync(entries)],
+            "local-source.zip",
+            { type: "application/zip" },
+          );
+      const result = await uploadAcquisition(upload, setUploadProgress);
       setAcquisitionId(result.acquisitionId);
       await queryClient.invalidateQueries({ queryKey: ["available-images"] });
+      setError(isSingleImage ? null : "Local files were packaged into a recovery source. Results may not represent deleted-file recovery from an original disk image.");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Upload failed. Check file type and size.");
     } finally {
@@ -200,9 +223,14 @@ export default function NewRecoveryPage() {
           has been verified — never against a live device directly.
         </p>
         <label className="mb-3 block rounded border border-dashed border-recovery/50 bg-recovery-soft px-3 py-2.5 text-sm text-ink">
-          <span className="font-medium">Upload a forensic image or ZIP test set</span>
-          <input className="mt-1 block max-w-full text-sm" type="file" accept=".img,.zip" onChange={handleFileSelect} disabled={uploading} />
-          <span className="mt-0.5 block text-xs text-body-muted">Maximum upload size: 500MB</span>
+          <span className="font-medium">Choose a forensic image, files, or a whole folder</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery" onClick={() => document.getElementById("recovery-source-files")?.click()} disabled={uploading}>Choose files</button>
+            <button type="button" className="rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery" onClick={() => directoryInputRef.current?.click()} disabled={uploading}>Choose folder</button>
+          </div>
+          <input id="recovery-source-files" className="sr-only" type="file" accept=".img,.zip,*/*" multiple onChange={handleSourceSelect} disabled={uploading} />
+          <input ref={directoryInputRef} className="sr-only" type="file" multiple onChange={handleSourceSelect} disabled={uploading} />
+          <span className="mt-0.5 block text-xs text-body-muted">Maximum upload size: 500MB. Local files and folders are packaged before upload.</span>
           {uploading && (
             <div className="mt-2">
               <div className="mb-1 flex justify-between text-xs text-body-muted"><span>Uploading</span><span>{uploadProgress}%</span></div>
