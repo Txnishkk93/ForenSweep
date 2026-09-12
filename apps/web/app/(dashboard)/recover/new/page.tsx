@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
+import { ExpandableSection } from "@/components/ExpandableSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authorizeRecoveryCertificate, auditRecoveryCertificateUpload, createRecoveryJob, getAvailableImages, getCertificates, getDevices, uploadAcquisition } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
@@ -34,6 +35,9 @@ export default function NewRecoveryPage() {
   const acquisition = devices.find((device) => device.id === acquisitionId);
   const blocked = false;
   const recoveryTarget = acquisition ? { deviceId: acquisition.id } : acquisitionId ? { imageId: acquisitionId } : {};
+  const sanitizedCertificates = certificates.filter((certificate) => certificate.verificationResult);
+  const acquisitionCount = devices.length + images.length;
+  const selectedAcquisition = acquisition ?? images.find((image) => image.id === acquisitionId);
 
   useEffect(() => {
     const certificateId = new URLSearchParams(window.location.search).get("certificateId");
@@ -148,23 +152,30 @@ export default function NewRecoveryPage() {
         <p className="mb-3 text-[13px] text-body-muted">
           These records authorize an attempt to scan the same target. A successful secure wipe is not reversible and may correctly produce no recoverable files.
         </p>
-        <div className="divide-y divide-hairline">
-          {certificates.filter((certificate) => certificate.verificationResult).map((certificate) => (
-            <div key={certificate.id} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-[14px] font-medium text-ink">{certificate.targetDisplayName ?? "Sanitized target"}</p>
-                <p className="text-[12px] text-body-muted">{certificate.method} · {certificate.standard} · {new Date(certificate.createdAt).toLocaleDateString()}</p>
+        {sanitizedCertificates.length ? (
+          <ExpandableSection
+            visibleCount={3}
+            totalCount={sanitizedCertificates.length}
+            renderListAction={(expanded) => (
+              <div className="divide-y divide-hairline">
+                {sanitizedCertificates.slice(0, expanded ? sanitizedCertificates.length : 3).map((certificate) => (
+                  <div key={certificate.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-medium text-ink">{certificate.targetDisplayName ?? "Sanitized target"}</p>
+                      <p className="text-[12px] text-body-muted">{certificate.method} · {certificate.standard} · {new Date(certificate.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <Link
+                      href={`/recover/new?certificateId=${certificate.id}`}
+                      className="shrink-0 rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery hover:bg-recovery-soft"
+                    >
+                      Recover
+                    </Link>
+                  </div>
+                ))}
               </div>
-              <Link
-                href={`/recover/new?certificateId=${certificate.id}`}
-                className="shrink-0 rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery hover:bg-recovery-soft"
-              >
-                Recover
-              </Link>
-            </div>
-          ))}
-          {!certificates.length && <p className="py-2 text-[13px] text-body-muted">No completed ForenSweep sanitizations found.</p>}
-        </div>
+            )}
+          />
+        ) : <p className="py-2 text-[13px] text-body-muted">No completed ForenSweep sanitizations found.</p>}
       </DataCard>
 
       <DataCard className="mb-4">
@@ -175,61 +186,62 @@ export default function NewRecoveryPage() {
           Recovery only runs against a bit-for-bit forensic image whose hash
           has been verified — never against a live device directly.
         </p>
+        <label className="mb-3 block rounded border border-dashed border-recovery/50 bg-recovery-soft p-4 text-sm text-ink">
+          <span className="font-medium">Upload a forensic image or ZIP test set</span>
+          <input className="mt-2 block w-full text-sm" type="file" accept=".img,.zip" onChange={handleFileSelect} disabled={uploading} />
+          <span className="mt-1 block text-xs text-body-muted">Maximum upload size: 500MB</span>
+          {uploading && (
+            <div className="mt-3">
+              <div className="mb-1 flex justify-between text-xs text-body-muted"><span>Uploading</span><span>{uploadProgress}%</span></div>
+              <progress className="h-2 w-full accent-recovery" max="100" value={uploadProgress} />
+            </div>
+          )}
+        </label>
+        {selectedAcquisition && !devices.slice(0, 3).some((device) => device.id === acquisitionId) && !images.slice(0, 3).some((image) => image.id === acquisitionId) && (
+          <p className="mb-3 text-[12px] text-body-muted">Selected: <span className="font-medium text-ink">{"model" in selectedAcquisition ? selectedAcquisition.model ?? selectedAcquisition.type : selectedAcquisition.filename}</span></p>
+        )}
         <div className="flex flex-col gap-2">
-          <label className="mb-2 rounded border border-dashed border-recovery/50 bg-recovery-soft p-4 text-sm text-ink">
-            <span className="font-medium">Upload a forensic image or ZIP test set</span>
-            <input className="mt-2 block w-full text-sm" type="file" accept=".img,.zip" onChange={handleFileSelect} disabled={uploading} />
-            <span className="mt-1 block text-xs text-body-muted">Maximum upload size: 500MB</span>
-            {uploading && (
-              <div className="mt-3">
-                <div className="mb-1 flex justify-between text-xs text-body-muted"><span>Uploading</span><span>{uploadProgress}%</span></div>
-                <progress className="h-2 w-full accent-recovery" max="100" value={uploadProgress} />
-              </div>
-            )}
-          </label>
           {loadingSources && <p className="text-sm text-body-muted">Loading acquisitions...</p>}
           {!loadingSources && !devices.length && !images.length && !error && (
             <p className="text-sm text-body-muted">No verified acquisitions or storage devices detected.</p>
           )}
-          {devices.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              disabled={Boolean(a.mounted || a.isSystemDisk)}
-              onClick={() => setAcquisitionId(a.id)}
-              className={
-                "flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " +
-                (acquisitionId === a.id
-                  ? "border-recovery bg-recovery-soft"
-                  : "border-hairline-strong hover:bg-canvas-soft")
-              }
-            >
-              <div>
-                <MonoText>{a.path}</MonoText>
-                <p className="mt-1 text-[12px] text-body-muted">{a.model ?? a.type}</p>
-              </div>
-              <StatusBadge label={a.mounted || a.isSystemDisk ? "Unavailable" : "Device"} tone={a.mounted || a.isSystemDisk ? "warning" : "success"} />
-            </button>
-          ))}
-          {images.map((image) => (
-            <button
-              key={image.id}
-              type="button"
-              onClick={() => setAcquisitionId(image.id)}
-              className={
-                "flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " +
-                (acquisitionId === image.id
-                  ? "border-recovery bg-recovery-soft"
-                  : "border-hairline-strong hover:bg-canvas-soft")
-              }
-            >
-              <div>
-                <p className="text-[14px] font-medium text-ink">{image.filename}</p>
-                <p className="mt-1 text-[12px] text-body-muted">{formatBytes(image.sizeBytes)}</p>
-              </div>
-              <StatusBadge label="Image" tone="success" />
-            </button>
-          ))}
+          <ExpandableSection
+            visibleCount={3}
+            totalCount={acquisitionCount}
+            renderListAction={(expanded) => (
+              <>
+                {devices.slice(0, expanded ? devices.length : 3).map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    disabled={Boolean(a.mounted || a.isSystemDisk)}
+                    onClick={() => setAcquisitionId(a.id)}
+                    className={"flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === a.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
+                  >
+                    <div>
+                      <MonoText>{a.path}</MonoText>
+                      <p className="mt-1 text-[12px] text-body-muted">{a.model ?? a.type}</p>
+                    </div>
+                    <StatusBadge label={a.mounted || a.isSystemDisk ? "Unavailable" : "Device"} tone={a.mounted || a.isSystemDisk ? "warning" : "success"} />
+                  </button>
+                ))}
+                {images.slice(0, expanded ? images.length : Math.max(0, 3 - devices.length)).map((image) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => setAcquisitionId(image.id)}
+                    className={"flex items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === image.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
+                  >
+                    <div>
+                      <p className="text-[14px] font-medium text-ink">{image.filename}</p>
+                      <p className="mt-1 text-[12px] text-body-muted">{formatBytes(image.sizeBytes)}</p>
+                    </div>
+                    <StatusBadge label="Image" tone="success" />
+                  </button>
+                ))}
+              </>
+            )}
+          />
         </div>
         {blocked && (
           <div className="mt-3 rounded border border-warning/30 bg-warning-soft p-3">
