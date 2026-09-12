@@ -64,10 +64,13 @@ def _target_metadata(job: dict[str, Any], device: dict[str, Any]) -> tuple[str, 
     raw_paths = job.get("eraseFileList") if scope == "SPECIFIC_FILES" else None
     paths = [str(item) for item in raw_paths or [] if isinstance(item, str)]
     if paths:
-        if len(paths) == 1:
-            display_name = Path(paths[0]).name or paths[0]
+        names = [Path(item).name or item for item in paths]
+        if len(names) == 1:
+            display_name = names[0]
+        elif len(names) <= 3:
+            display_name = " + ".join(names)
         else:
-            display_name = "Selected files and folders"
+            display_name = f"{len(names)} selected items"
         return display_name, paths, "Local filesystem"
     model = str(device.get("model") or "").strip()
     location = str(device.get("path") or job.get("sourceImagePath") or "").strip()
@@ -83,7 +86,7 @@ def _write_professional_pdf(
 ) -> None:
     try:
         from reportlab.lib import colors
-        from reportlab.lib.enums import TA_RIGHT
+        from reportlab.lib.enums import TA_LEFT, TA_RIGHT
         from reportlab.lib.pagesizes import LETTER
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import inch
