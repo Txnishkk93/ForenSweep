@@ -411,6 +411,11 @@ export default function LandingPage() {
                     title: "ForenSweep",
                 }}
                 description="Certified erasure, recovery, and audit tools for compliance and IT teams."
+                socialLinks={[
+                    { name: "GitHub", href: "https://github.com/Txnishkk93", icon: "github" },
+                    { name: "LinkedIn", href: "https://www.linkedin.com/in/tanishk-rajput-a74418378/", icon: "linkedin" },
+                    { name: "X", href: "https://x.com/_txnishkk_", icon: "x" },
+                ]}
                 sections={[
                     {
                         title: "Product",

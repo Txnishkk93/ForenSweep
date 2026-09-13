@@ -1,10 +1,4 @@
-import {
-  FaFacebook,
-  FaGithub,
-  FaInstagram,
-  FaLinkedin,
-  FaTwitter,
-} from "react-icons/fa";
+import { FaGithub, FaLinkedin, FaXTwitter } from "react-icons/fa6";
 import { cn } from "@/lib/utils";
 import {
   Logo,
@@ -27,12 +21,19 @@ interface FooterLogo {
   title: string;
 }
 
+interface FooterSocialLink {
+  name: string;
+  href: string;
+  icon: "github" | "linkedin" | "x";
+}
+
 interface FooterBasicProps {
   logo?: FooterLogo;
   description?: string;
   sections?: FooterSection[];
   copyright?: string;
   legalLinks?: FooterLink[];
+  socialLinks?: FooterSocialLink[];
   className?: string;
 }
 
@@ -99,7 +100,7 @@ const defaultProps: Footer2Props = {
 const MAX_SECTIONS = 4;
 
 const Footer2 = (props: Props) => {
-  const { logo, description, sections, copyright, legalLinks, className } = {
+  const { logo, description, sections, copyright, legalLinks, socialLinks, className } = {
     ...defaultProps,
     ...props,
   };
@@ -113,18 +114,37 @@ const Footer2 = (props: Props) => {
           <div className="grid grid-cols-2 gap-8 lg:grid-cols-6">
             <div className="col-span-2 mb-8 lg:mb-0">
               <div className="flex items-center lg:justify-start">
-                <a href={logo?.url}>
-                  <img
-                    src={logo?.src}
-                    alt={logo?.alt}
-                    title={logo?.title}
-                    className="h-7 dark:invert"
-                  />
+                <a href={logo?.url} className="text-2xl font-black tracking-[-0.06em] text-neutral-950">
+                  {logo?.title}<sup className="ml-0.5 text-[10px] tracking-normal">®</sup>
                 </a>
               </div>
               <p className="mt-4 max-w-xs text-sm font-medium text-neutral-500">
                 {description}
               </p>
+              {socialLinks && socialLinks.length > 0 && (
+                <div className="mt-6 flex items-center gap-4">
+                  {socialLinks.map((socialLink) => {
+                    const Icon = socialLink.icon === "github"
+                      ? FaGithub
+                      : socialLink.icon === "linkedin"
+                        ? FaLinkedin
+                        : FaXTwitter;
+
+                    return (
+                      <a
+                        key={socialLink.name}
+                        href={socialLink.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={socialLink.name}
+                        className="text-neutral-500 transition-colors hover:text-neutral-950"
+                      >
+                        <Icon size={18} aria-hidden="true" />
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {visibleSections.map((section, sectionIdx) => (
               <div key={sectionIdx}>
