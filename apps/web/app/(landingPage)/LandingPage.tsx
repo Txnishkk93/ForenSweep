@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import { useState } from "react";
+import { Footer2 } from "@/components/footer2";
 import {
     ArrowUpRight,
     Box,
@@ -400,6 +401,61 @@ export default function LandingPage() {
                     </div>
                 </div>
             </section>
+
+            <Footer2
+                className="relative z-10 border-t border-neutral-200 bg-[#f4f4f2] px-6 text-neutral-950 sm:px-10"
+                logo={{
+                    url: "https://forensweep.com",
+                    src: "/logo.svg",
+                    alt: "ForenSweep logo",
+                    title: "ForenSweep",
+                }}
+                description="Certified erasure, recovery, and audit tools for compliance and IT teams."
+                sections={[
+                    {
+                        title: "Product",
+                        links: [
+                            { name: "Data Erasure", href: "/solutions/data-erasure" },
+                            { name: "Data Recovery", href: "/solutions/data-recovery" },
+                            { name: "Digital Forensics & Audit Trail", href: "/solutions/forensics-audit-trail" },
+                            { name: "Enterprise Fleet Management", href: "/solutions/fleet-management" },
+                            { name: "Compliance Reporting", href: "/solutions/compliance-reporting" },
+                        ],
+                    },
+                    {
+                        title: "Company",
+                        links: [
+                            { name: "About", href: "/about" },
+                            { name: "Insights", href: "/insights" },
+                            { name: "Careers", href: "/careers" },
+                            { name: "Contact", href: "/contact" },
+                        ],
+                    },
+                    {
+                        title: "Resources",
+                        links: [
+                            { name: "Standards & References", href: "/standards" },
+                            { name: "Documentation", href: "/docs" },
+                            { name: "API Reference", href: "/api" },
+                            { name: "Status", href: "/status" },
+                        ],
+                    },
+                    {
+                        title: "Support",
+                        links: [
+                            { name: "Help Center", href: "/support" },
+                            { name: "Security", href: "/legal/security" },
+                            { name: "GDPR Compliance", href: "/legal/gdpr" },
+                        ],
+                    },
+                ]}
+                copyright={`© ${new Date().getFullYear()} ForenSweep. All rights reserved.`}
+                legalLinks={[
+                    { name: "Privacy Policy", href: "/legal/privacy" },
+                    { name: "Terms and Conditions", href: "/legal/terms" },
+                    { name: "Data Processing Agreement", href: "/legal/dpa" },
+                ]}
+            />
         </main>
     );
 }
