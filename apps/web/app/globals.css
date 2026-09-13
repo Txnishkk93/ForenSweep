@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tech-marquee-track {
+  animation: marquee 30s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tech-marquee-track {
+    animation-play-state: paused;
+    transform: translateX(0);
+  }
+}
+
 @layer base {
   html {
     @apply antialiased;

@@ -4,30 +4,44 @@ import Image from "next/image";
 import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import { useState } from "react";
 import { Footer2 } from "@/components/footer2";
+import type { IconType } from "react-icons";
+import {
+    SiDocker,
+    SiGithubactions,
+    SiNextdotjs,
+    SiNodedotjs,
+    SiPostgresql,
+    SiPrisma,
+    SiPython,
+    SiRedis,
+    SiSocketdotio,
+    SiTailwindcss,
+    SiTypescript,
+    SiVercel,
+} from "react-icons/si";
 import {
     ArrowUpRight,
-    Box,
     ClipboardCheck,
-    CircleDollarSign,
     Eraser,
-    FileText,
     FileSearch,
-    Hexagon,
     ExternalLink,
     RotateCcw,
     Server,
     ShieldCheck,
-    Triangle,
 } from "lucide-react";
 
-const logos = [
-    { name: "Mercury", icon: CircleDollarSign },
-    { name: "ramp", icon: ArrowUpRight },
-    { name: "HEX", icon: Hexagon },
-    { name: "Vercel", icon: Triangle },
-    { name: "descript", icon: FileText },
-    { name: "Cash App", icon: CircleDollarSign },
-    { name: "runway", icon: Box },
+const techStack: { name: string; icons: IconType[]; color: string }[] = [
+    { name: "Python", icons: [SiPython], color: "#3776AB" },
+    { name: "Node.js", icons: [SiNodedotjs], color: "#339933" },
+    { name: "TypeScript", icons: [SiTypescript], color: "#3178C6" },
+    { name: "PostgreSQL", icons: [SiPostgresql], color: "#4169E1" },
+    { name: "Prisma ORM", icons: [SiPrisma], color: "#2D3748" },
+    { name: "Next.js", icons: [SiNextdotjs], color: "#111111" },
+    { name: "Tailwind CSS", icons: [SiTailwindcss], color: "#06B6D4" },
+    { name: "BullMQ + Redis", icons: [SiRedis], color: "#DC382D" },
+    { name: "Socket.IO", icons: [SiSocketdotio], color: "#010101" },
+    { name: "GitHub Actions", icons: [SiGithubactions], color: "#2088FF" },
+    { name: "Vercel / Docker", icons: [SiVercel, SiDocker], color: "#2496ED" },
 ];
 
 const solutions = [
@@ -164,6 +178,53 @@ function TextureImage2({ alt, src }: { alt: string; src: string }) {
                 }}
             />
         </div>
+    );
+}
+
+function Marquee({
+    children,
+    duration = 30,
+    pauseOnHover = true,
+}: {
+    children: React.ReactNode;
+    duration?: number;
+    pauseOnHover?: boolean;
+}) {
+    return (
+        <div
+            className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
+            aria-label="ForenSweep technology stack"
+        >
+            <div
+                className={`tech-marquee-track flex w-max items-center ${pauseOnHover ? "hover:[animation-play-state:paused]" : ""}`}
+                style={{ animationDuration: `${duration}s` }}
+            >
+                <div className="flex shrink-0 items-center">{children}</div>
+                <div className="flex shrink-0 items-center" aria-hidden="true">{children}</div>
+            </div>
+        </div>
+    );
+}
+
+function TechStackLogoCloud() {
+    return (
+        <section className="relative z-10 w-full bg-[#f4f4f2] px-6 py-16 sm:px-10" aria-labelledby="tech-stack-heading">
+            <p id="tech-stack-heading" className="text-center text-xs font-medium uppercase tracking-[0.22em] text-neutral-500">
+                Our Tech Stack
+            </p>
+            <div className="mt-[10px]">
+                <Marquee>
+                {techStack.map(({ name, icons, color }) => (
+                    <div key={name} className="mx-6 flex shrink-0 items-center gap-2 text-sm font-medium text-neutral-600 sm:mx-8">
+                        <span className="flex items-center gap-1">
+                            {icons.map((Icon) => <Icon key={Icon.name} className="h-4 w-4 sm:h-5 sm:w-5" style={{ color }} aria-hidden="true" />)}
+                        </span>
+                        <span>{name}</span>
+                    </div>
+                ))}
+                </Marquee>
+            </div>
+        </section>
     );
 }
 
@@ -322,20 +383,9 @@ export default function LandingPage() {
                     <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-[#f4f4f2] via-transparent to-[#f4f4f2]/40" />
                 </motion.div>
 
-                <div className="relative z-10 w-full border-t border-neutral-300/70 px-6 pb-10 pt-7 sm:px-10">
-                    <p className="text-center text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500">
-                        Trusted by teams of every scale
-                    </p>
-                    <div className="mx-auto mt-6 flex max-w-5xl items-center justify-start gap-8 overflow-x-auto pb-1 text-neutral-700 sm:justify-center sm:gap-10">
-                        {logos.map(({ name, icon: Icon }) => (
-                            <div key={name} className="flex shrink-0 items-center gap-1.5 text-sm font-semibold tracking-tight">
-                                <Icon size={17} strokeWidth={2.2} aria-hidden="true" />
-                                {name}
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </section>
+
+            <TechStackLogoCloud />
 
             <section id="solutions" className="relative z-10 border-t border-neutral-200 px-6 py-24 sm:px-10">
                 <div className="mx-auto max-w-6xl">
