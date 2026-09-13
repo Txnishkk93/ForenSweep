@@ -115,7 +115,7 @@ const insightCards = [
 		title: "HIPAA Privacy Rule — Retention of Documentation (§164.530(j))",
 		excerpt: "U.S. healthcare rule requiring retention of privacy policies and certain records for at least 6 years, a common benchmark in retention matrices.",
 		href: "https://www.hhs.gov/hipaa/for-professionals/privacy/index.html",
-		image: "/avatar-1.svg",
+		image: "/img11.jpg",
 		external: true,
 	},
 ];
