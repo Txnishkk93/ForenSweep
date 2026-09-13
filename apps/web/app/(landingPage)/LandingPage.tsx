@@ -12,6 +12,7 @@ import {
 	FileText,
 	FileSearch,
 	Hexagon,
+	ExternalLink,
 	RotateCcw,
 	Server,
 	Triangle,
@@ -62,53 +63,67 @@ const solutions = [
 
 const insightCards = [
 	{
-		category: "Guides",
-		title: "GDPR Erasure Requirements Explained",
-		excerpt: "A practical guide to requests, verification, and defensible deletion records.",
-		href: "/insights/gdpr-erasure-requirements",
+		category: "Erasure Standard",
+		title: "NIST SP 800-88 Rev. 2 — Guidelines for Media Sanitization",
+		excerpt: "The official U.S. standard for securely erasing data from HDDs, SSDs, USB drives, and other media (Clear / Purge / Destroy, verification, audit records).",
+		href: "https://csrc.nist.gov/pubs/sp/800/88/r2/final",
+		image: "/download (1).jpg",
+		external: true,
+	},
+	{
+		category: "Erasure Standard",
+		title: "ATA Security Feature Set — SECURITY ERASE UNIT",
+		excerpt: "The ATA specification behind device-native secure erase commands used to wipe SATA HDDs and SSDs at the firmware level.",
+		href: "https://www.thomas-krenn.com/en/wiki/ATA_Security_Feature_Set",
 		image: "/download.jpg",
+		external: true,
 	},
 	{
-		category: "Guides",
-		title: "Recovery Best Practices After Ransomware",
-		excerpt: "Build a recovery workflow that protects evidence while restoring operations.",
-		href: "/insights/recovery-best-practices",
+		category: "Erasure Standard",
+		title: "Linux SSD Secure Erase (SATA & NVMe) — Arch Wiki",
+		excerpt: "Practical, step-by-step commands to securely reset SATA and NVMe SSDs using hdparm and nvme-cli, including warnings about frozen mode and crypto erase.",
+		href: "https://wiki.archlinux.org/title/Solid_state_drive/Memory_cell_clearing",
 		image: "/download (2).jpg",
+		external: true,
 	},
 	{
-		category: "Product Updates",
-		title: "What's New in ForenSweep — v2.4",
-		excerpt: "Faster fleet actions, clearer audit trails, and more resilient cloud recovery.",
-		href: "/insights/product-updates-v2-4",
+		category: "Forensics Tool",
+		title: "PhotoRec — File Carving Documentation",
+		excerpt: "Official docs for PhotoRec, the leading open-source signature-based file carving tool used to recover deleted files without file-system metadata.",
+		href: "https://www.cgsecurity.org/wiki/PhotoRec",
 		image: "/download (3).jpg",
+		external: true,
 	},
 	{
-		category: "Case Studies",
-		title: "How Northstar Cut Audit Prep Time by 80% with ForenSweep",
-		excerpt: "See how one IT team turned scattered evidence into an audit-ready record.",
-		href: "/insights/northstar-case-study",
+		category: "Forensics Tool",
+		title: "Scalpel — Forensic File Carving Tool",
+		excerpt: "Reference implementation for configurable, signature-based file carving; useful for understanding signature databases and carving workflows.",
+		href: "https://github.com/sleuthkit/scalpel",
 		image: "/graphic design inspo.jpg",
+		external: true,
 	},
 	{
-		category: "Security",
-		title: "Reading the Signals in Noisy Evidence",
-		excerpt: "How better context turns fragmented system traces into a clear investigation.",
-		href: "/insights/reading-noisy-evidence",
-		image: "/download (4).jpg",
+		category: "Legal Framework",
+		title: "GDPR — Article 5(1)(e) Storage Limitation",
+		excerpt: "The legal basis in EU law for “data must be kept no longer than necessary”, driving retention schedules and defensible deletion policies.",
+		href: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679",
+		image: "/(2) Home _ X.jpg",
+		external: true,
 	},
 	{
-		category: "Product Updates",
-		title: "A Clearer View of Every Connected Device",
-		excerpt: "Explore the latest visual improvements to device evidence and recovery workflows.",
-		href: "/insights/connected-device-view",
-		image: "/download (5).jpg",
+		category: "Legal Framework",
+		title: "HIPAA Privacy Rule — Retention of Documentation (§164.530(j))",
+		excerpt: "U.S. healthcare rule requiring retention of privacy policies and certain records for at least 6 years, a common benchmark in retention matrices.",
+		href: "https://www.hhs.gov/hipaa/for-professionals/privacy/index.html",
+		image: "/avatar-1.svg",
+		external: true,
 	},
 ];
 
 function TextureImage({ alt, src }: { alt: string; src: string }) {
 	return (
 		<div className="relative aspect-video overflow-hidden bg-neutral-200">
-			<Image src={src} alt={alt} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover grayscale contrast-125" />
+			<Image src={src} alt={alt} fill loading="eager" sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
 			<div
 				aria-hidden="true"
 				className="absolute inset-0 mix-blend-multiply"
@@ -128,8 +143,9 @@ function TextureImage2({ alt, src }: { alt: string; src: string }) {
 				src={src}
 				alt={alt}
 				fill
+				loading="eager"
 				sizes="(max-width: 768px) 100vw, 33vw"
-				className="object-cover grayscale contrast-125"
+				className="object-cover"
 			/>
 			<div
 				aria-hidden="true"
@@ -146,9 +162,11 @@ function TextureImage2({ alt, src }: { alt: string; src: string }) {
 
 export default function LandingPage() {
 	const [activeInsightTab, setActiveInsightTab] = useState("All");
-	const visibleInsightCards = activeInsightTab === "All"
-		? insightCards
-		: insightCards.filter(({ category }) => category === activeInsightTab);
+	const featuredInsight = insightCards[0]!;
+	const otherInsightCards = insightCards.slice(1);
+	const visibleInsightCards = activeInsightTab === "All" || activeInsightTab === "Standards & References"
+		? otherInsightCards
+		: [];
 
 	return (
 		<main className="relative min-h-screen overflow-hidden bg-[#f4f4f2] font-sans text-neutral-950">
@@ -275,7 +293,7 @@ export default function LandingPage() {
 						<h2 className="mt-4 text-4xl font-extrabold tracking-tight text-neutral-900 md:text-5xl">Guides, updates, and stories from the field.</h2>
 					</div>
 					<div className="mt-6 mb-12 flex gap-6 overflow-x-auto border-b border-neutral-200 pb-px text-sm whitespace-nowrap md:justify-center">
-						{["All", "Guides", "Product Updates", "Case Studies", "Security"].map((tab) => (
+						{["All", "Standards & References"].map((tab) => (
 							<button key={tab} type="button" onClick={() => setActiveInsightTab(tab)} className={`shrink-0 pb-3 ${activeInsightTab === tab ? "border-b-2 border-black font-medium text-black" : "text-neutral-400 transition-colors hover:text-neutral-700"}`}>{tab}</button>
 						))}
 					</div>
@@ -286,17 +304,17 @@ export default function LandingPage() {
 						viewport={{ once: true, amount: 0.2 }}
 						className="mb-10 grid overflow-hidden border border-neutral-200 bg-white transition hover:border-neutral-400 md:grid-cols-2"
 					>
-						<TextureImage2 src="/download (1).jpg" alt="ForenSweep data lifecycle editorial illustration" />
+						<TextureImage2 src={featuredInsight.image} alt={`${featuredInsight.title} thumbnail`} />
 						<div className="flex flex-col justify-center p-8">
-							<p className="text-xs uppercase tracking-wide text-neutral-500">Guides</p>
-							<h3 className="mt-2 text-2xl font-bold text-neutral-900">How to Build a Data Retention Policy</h3>
-							<p className="mt-3 text-sm leading-relaxed text-neutral-500">A clear framework for deciding what to keep, when to delete it, and how to prove every decision.</p>
-							<a href="/insights/data-retention-policy" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-neutral-900 transition-all hover:gap-2">Read article <ArrowUpRight size={15} aria-hidden="true" /></a>
+							<p className="text-xs uppercase tracking-wide text-neutral-500">{featuredInsight.category}</p>
+							<h3 className="mt-2 text-2xl font-bold text-neutral-900">{featuredInsight.title}</h3>
+							<p className="mt-3 text-sm leading-relaxed text-neutral-500">{featuredInsight.excerpt}</p>
+							<a href={featuredInsight.href} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-neutral-900 transition-all hover:gap-2">View source <ExternalLink size={14} aria-hidden="true" /></a>
 						</div>
 					</motion.article>
 
 					<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-						{visibleInsightCards.map(({ category, title, excerpt, href, image }, index) => (
+						{visibleInsightCards.map(({ category, title, excerpt, href, image, external }, index) => (
 							<motion.article
 								key={title}
 								initial={{ opacity: 0, y: 18 }}
@@ -310,7 +328,15 @@ export default function LandingPage() {
 									<p className="text-xs uppercase tracking-wide text-neutral-500">{category}</p>
 									<h3 className="mt-2 text-base font-bold text-neutral-900">{title}</h3>
 									<p className="mt-2 text-sm leading-relaxed text-neutral-500">{excerpt}</p>
-									<a href={href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-neutral-900 transition-all group-hover:gap-2">Read <ArrowUpRight size={15} aria-hidden="true" /></a>
+									<a
+										href={href}
+										target={external ? "_blank" : undefined}
+										rel={external ? "noopener noreferrer" : undefined}
+										className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-neutral-900 transition-all group-hover:gap-2"
+									>
+										{external ? "View source" : "Read"}
+										{external ? <ExternalLink size={14} aria-hidden="true" /> : <ArrowUpRight size={15} aria-hidden="true" />}
+									</a>
 								</div>
 							</motion.article>
 						))}
