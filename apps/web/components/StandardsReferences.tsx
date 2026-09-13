@@ -79,7 +79,7 @@ export default function StandardsReferences() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
               transition={{ duration: 0.45, delay: index * 0.05 }}
-              className="group flex min-h-[250px] flex-col rounded-lg border border-neutral-200 bg-white p-6 transition duration-200 hover:-translate-y-1 hover:border-neutral-400"
+              className="group flex min-h-[250px] flex-col rounded-sm border border-neutral-200 bg-white p-6 transition duration-200 hover:-translate-y-1 hover:border-neutral-400"
             >
               <p className="text-xs uppercase tracking-wide text-neutral-500">{category}</p>
               <h3 className="mt-2 text-lg font-bold text-neutral-900">{title}</h3>
