@@ -12,9 +12,7 @@ const adapter = new PrismaPg({
 
 export const prismaClient = new PrismaClient({
 	adapter,
-	...(process.env.PRISMA_QUERY_LOG === "true"
-		? { log: [{ emit: "event", level: "query" as const }] }
-		: {}),
+	log: [{ emit: "event", level: "query" }],
 });
 
 if (process.env.PRISMA_QUERY_LOG === "true") {

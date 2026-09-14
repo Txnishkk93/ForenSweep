@@ -2,6 +2,8 @@
 
 ForenSweep is a safe, simulation-first forensic workflow. The API, Prisma database, BullMQ queues, Python worker, and authenticated Socket.IO service are wired for a judge-visible demo without physical-drive access.
 
+For hosted deployment, see [DEPLOYMENT-VERCEL-RAILWAY-RENDER.md](DEPLOYMENT-VERCEL-RAILWAY-RENDER.md).
+
 ## Architecture
 
 ```mermaid
