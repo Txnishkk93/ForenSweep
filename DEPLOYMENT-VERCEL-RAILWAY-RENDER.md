@@ -141,6 +141,14 @@ Copy the resulting `.img` files to the deployed `SAFE_IMAGE_ROOT` volume using t
 
 Create a service from the repository.
 
+For a Render service with the repository root as its Root Directory, use this build command:
+
+```bash
+bun install --frozen-lockfile && bunx turbo run build --filter=backend...
+```
+
+The `...` is intentional. It tells Turbo to build the backend and its workspace dependencies before starting the API. Do not build the backend with `bun run --cwd apps/backend build` alone.
+
 Use the repository root as the build context. The API service must:
 
 1. Install Bun dependencies.
