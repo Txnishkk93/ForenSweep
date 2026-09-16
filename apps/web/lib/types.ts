@@ -71,6 +71,7 @@ export interface AvailableImage {
   filename: string;
   sizeBytes: string;
   createdAt: string;
+  format?: "FORENSWEEP_FORENSIC_ARCHIVE" | "RAW_IMAGE";
 }
 
 export interface SanitizationPlan {

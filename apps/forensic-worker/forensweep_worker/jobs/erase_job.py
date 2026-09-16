@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from shutil import copyfile
 from typing import Any
 
 from ..api_client import WorkerApiClient
@@ -12,9 +13,11 @@ from ..certificate import create_certificate
 from datetime import datetime, timezone
 import signal
 import json
+import hashlib
 import logging
 import os
 import sys
+import zipfile
 try:
     import fcntl
 except ImportError:  # pragma: no cover - real hardware is Linux-only
@@ -59,6 +62,9 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
         raise ValueError("Worker context does not contain a managed image reference")
     image_path = validate_image_target(raw_path, config.safe_image_root)
     total_passes = int(job.get("totalPasses") or (3 if job.get("eraseMethod") == "OVERWRITE_MULTI" else 1))
+    forensic_image_path = config.safe_image_root / f"{image_path.stem}-sanitized-forensic-{job_id[:8]}.img"
+    copyfile(image_path, forensic_image_path)
+    client.audit(job_id, {"action": "FORENSIC_IMAGE_CREATED", "detail": {"path": str(forensic_image_path), "sourcePath": str(image_path), "purpose": "preserve pre-erasure evidence for future recovery"}})
 
     def progress(current_pass: int, passes: int, processed: int, total: int, stage: str) -> None:
         client.progress(job_id, {"stage": stage, "progress": round((processed / max(total, 1)) * 100), "currentPass": current_pass, "totalPasses": passes, "progressDetail": {"simulated": True, "bytesProcessed": str(processed), "bytesTotal": str(total)}})
@@ -80,7 +86,7 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
         })()
     else:
         verification = verify_overwrite(image_path, overwrite_pattern(total_passes), config.sample_count)
-    client.complete(job_id, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "verificationData": verification.details})
+    client.complete(job_id, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "verificationData": {**verification.details, "forensicImagePath": str(forensic_image_path), "forensicImageName": forensic_image_path.name}})
     if verification.verified:
         certificate = create_certificate(context_data, {"verified": verification.verified, "residualRiskScore": verification.residual_risk_score, "residualRiskLevel": verification.residual_risk_level, "details": verification.details}, config, started_at)
         client.certificate(certificate)
@@ -109,6 +115,32 @@ def run_local_file_erase(
         except Exception as error:
             failures.append({"path": raw_target, "error": str(error)})
     total = len(targets)
+    if failures or not targets:
+        client.fail(job_id, {"message": "No valid file targets were available to create a forensic image", "errorCode": "FORENSIC_IMAGE_SOURCE_INVALID", "detail": {"failures": failures}})
+        return
+    forensic_image_path = config.safe_image_root / f"files-sanitized-forensic-{job_id[:8]}.forensic.zip"
+    temporary_archive_path = config.safe_image_root / f"files-sanitized-forensic-{job_id[:8]}.forensic.zip.tmp"
+    config.safe_image_root.mkdir(parents=True, exist_ok=True)
+    manifest: list[dict[str, Any]] = []
+    preserved_bytes = 0
+    with zipfile.ZipFile(temporary_archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        for path in targets:
+            data = path.read_bytes()
+            member = f"files/{len(manifest):08d}-{path.name}"
+            archive.writestr(member, data)
+            preserved_bytes += len(data)
+            manifest.append({"member": member, "originalPath": str(path), "fileName": path.name, "sizeBytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+        archive.writestr("manifest.json", json.dumps({"format": "ForenSweep forensic archive", "version": 1, "files": manifest}, indent=2))
+    try:
+        with zipfile.ZipFile(temporary_archive_path) as archive:
+            if archive.testzip() is not None or "manifest.json" not in archive.namelist():
+                raise ValueError("invalid forensic archive")
+        temporary_archive_path.replace(forensic_image_path)
+    except (OSError, zipfile.BadZipFile, ValueError) as error:
+        temporary_archive_path.unlink(missing_ok=True)
+        client.fail(job_id, {"message": f"Forensic archive validation failed: {error}", "errorCode": "FORENSIC_ARCHIVE_INVALID"})
+        return
+    client.audit(job_id, {"action": "FORENSIC_IMAGE_CREATED", "detail": {"path": str(forensic_image_path), "sourcePathCount": total, "preservedBytes": preserved_bytes, "purpose": "preserve pre-erasure file data for future recovery"}})
     client.audit(job_id, {"action": "LOCAL_FILE_ERASE_STARTED", "detail": {"paths": raw_targets, "fileCount": total}})
     for index, path in enumerate(targets, start=1):
         try:
@@ -126,6 +158,9 @@ def run_local_file_erase(
         "erasedPathCount": len(erased),
         "failedPathCount": len(failures),
         "failures": failures,
+        "forensicImagePath": str(forensic_image_path),
+        "forensicImageName": forensic_image_path.name,
+        "forensicImageBytes": preserved_bytes,
     }
     if failures:
         client.fail(job_id, {"message": f"{len(failures)} local erase target(s) failed", "errorCode": "LOCAL_FILE_ERASE_FAILED"})

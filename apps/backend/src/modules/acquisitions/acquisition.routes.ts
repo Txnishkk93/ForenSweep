@@ -35,6 +35,15 @@ export function generatedUploadFilename(originalName: string): string {
   return `${randomUUID()}.upload${path.extname(originalName).toLowerCase()}`;
 }
 
+export function acquisitionFilename(originalName: string, suffix = ""): string {
+  const stem = path.basename(originalName, path.extname(originalName))
+    .replace(/[^a-zA-Z0-9._ -]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/, "") || "forensic-source";
+  return `${stem}${suffix}.img`;
+}
+
 export function hasZipSignature(bytes: Buffer): boolean {
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b &&
     ((bytes[2] === 0x03 && bytes[3] === 0x04) ||
@@ -83,11 +92,17 @@ acquisitionRoutes.post(
       const bytes = await readFile(uploadedPath);
       if (extension === ".img") {
         if (!isRawBinary(bytes)) throw new AppError(400, "INVALID_IMAGE_SIGNATURE", "The .img upload does not contain raw binary image data");
-        finalPath = path.join(root, `${randomUUID()}.img`);
+        finalPath = path.join(root, acquisitionFilename(file.originalname));
+        if (await stat(finalPath).then(() => true).catch(() => false)) {
+          finalPath = path.join(root, acquisitionFilename(file.originalname, `-${randomUUID().slice(0, 8)}`));
+        }
         await writeFile(finalPath, bytes, { flag: "wx" });
       } else if (extension === ".zip") {
         if (!hasZipSignature(bytes)) throw new AppError(400, "INVALID_ZIP_SIGNATURE", "The .zip upload is not a valid ZIP archive");
-        finalPath = path.join(root, `${randomUUID()}.img`);
+        finalPath = path.join(root, acquisitionFilename(file.originalname));
+        if (await stat(finalPath).then(() => true).catch(() => false)) {
+          finalPath = path.join(root, acquisitionFilename(file.originalname, `-${randomUUID().slice(0, 8)}`));
+        }
         extractionRoot = path.join(root, randomUUID());
         await runZipExtraction(uploadedPath, finalPath, extractionRoot);
       } else {

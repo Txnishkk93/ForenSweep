@@ -345,7 +345,9 @@ export async function createRecoveryJob(
         ? certificates.filter((certificate) => {
             const payload = certificate.canonicalPayload as Record<string, unknown>;
             const snapshot = payload.deviceSnapshot as Record<string, unknown> | undefined;
+            const verificationData = certificate.job.verificationData as Record<string, unknown> | null;
             return certificate.job.sourceImagePath === requestedSourcePath
+              || verificationData?.forensicImagePath === requestedSourcePath
               || snapshot?.path === requestedSourcePath;
           })
         : certificates)

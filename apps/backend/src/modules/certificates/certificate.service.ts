@@ -324,8 +324,10 @@ export async function authorizeRecoveryCertificate(
   const payload = input.certificate.payload as Record<string, unknown>;
   const deviceMatches = input.target.deviceId !== undefined
     && originatingJob.deviceId === input.target.deviceId;
+  const verificationData = originatingJob.verificationData as Record<string, unknown> | null;
   const imageMatches = sourcePath !== undefined
     && (originatingJob.sourceImagePath === sourcePath
+      || verificationData?.forensicImagePath === sourcePath
       || (payload.deviceSnapshot as Record<string, unknown> | undefined)?.path === sourcePath);
   const matches = Boolean(originatingJob && (deviceMatches || imageMatches));
   if (!matches) {

@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const role = user?.role?.toLowerCase() ?? "no active session";
 
   return (
-    <div className="h-screen overflow-hidden bg-canvas">
+    <div className="fixed inset-0 overflow-hidden bg-canvas">
       <div className="flex h-full min-h-0">
         <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-r border-hairline border-t-2 border-t-ink bg-surface-card">
           <div className="shrink-0 border-b border-hairline px-5 pb-5 pt-6">

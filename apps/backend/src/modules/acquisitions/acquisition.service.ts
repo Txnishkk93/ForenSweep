@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, realpath, stat } from "node:fs/promises";
+import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -9,6 +9,7 @@ export type AvailableImage = {
   filename: string;
   sizeBytes: string;
   createdAt: string;
+  format: "FORENSWEEP_FORENSIC_ARCHIVE" | "RAW_IMAGE";
 };
 
 function imageRoot(): string {
@@ -34,16 +35,24 @@ async function collect(root: string, directory = root): Promise<AvailableImage[]
       images.push(...(await collect(root, candidate)));
       continue;
     }
-    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".img") continue;
+    if (!entry.isFile() || ![".img", ".zip"].includes(path.extname(entry.name).toLowerCase())) continue;
     const resolved = await realpath(candidate);
     const relative = path.relative(root, resolved);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) continue;
     const metadata = await stat(resolved);
+    if (metadata.size === 0) continue;
+    if (entry.name.toLowerCase().endsWith(".forensic.zip")) {
+      const signature = await readFile(resolved).then((bytes) => bytes.subarray(0, 2).toString("ascii")).catch(() => "");
+      if (signature !== "PK") continue;
+    }
     images.push({
       id: imageId(relative),
       filename: relative.replaceAll(path.sep, "/"),
       sizeBytes: metadata.size.toString(),
       createdAt: metadata.birthtime.toISOString(),
+      format: relative.toLowerCase().endsWith(".forensic.zip")
+        ? "FORENSWEEP_FORENSIC_ARCHIVE"
+        : "RAW_IMAGE",
     });
   }
   return images;

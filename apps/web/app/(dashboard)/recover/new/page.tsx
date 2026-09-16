@@ -1,46 +1,38 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { zipSync } from "fflate";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { ExpandableSection } from "@/components/ExpandableSection";
 import { StatusBadge } from "@/components/StatusBadge";
-import { authorizeRecoveryCertificate, auditRecoveryCertificateUpload, createRecoveryJob, getAvailableImages, getCertificates, getDevices, uploadAcquisition } from "@/lib/backend-api";
+import { authorizeRecoveryCertificate, auditRecoveryCertificateUpload, createRecoveryJob, getAvailableImages, getCertificates } from "@/lib/backend-api";
 import { formatBytes } from "@/lib/status-colors";
 import type { Certificate } from "@/lib/types";
 
 export default function NewRecoveryPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [acquisitionId, setAcquisitionId] = useState("");
   const [scanType, setScanType] = useState<"quick" | "deep">("quick");
   const [submitting, setSubmitting] = useState(false);
-  const { data: devices = [], isLoading: loadingDevices, error: devicesError } = useQuery({ queryKey: ["devices"], queryFn: getDevices });
   const { data: images = [], isLoading: loadingImages, error: imagesError } = useQuery({ queryKey: ["available-images"], queryFn: getAvailableImages });
   const { data: certificates = [] } = useQuery({ queryKey: ["certificates"], queryFn: getCertificates });
-  const loadingSources = loadingDevices || loadingImages;
-  const sourceError = devicesError ?? imagesError;
+  const loadingSources = loadingImages;
+  const sourceError = imagesError;
   const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploading, setUploading] = useState(false);
   const [authorizationCertificateId, setAuthorizationCertificateId] = useState("");
   const [uploadedCertificate, setUploadedCertificate] = useState<{ payload: Record<string, unknown>; contentHash: string; signature: string } | undefined>();
   const [certificateUploadState, setCertificateUploadState] = useState<"idle" | "dragging" | "parsing" | "valid" | "mismatched" | "invalid" | "unparseable">("idle");
   const [certificateUploadMessage, setCertificateUploadMessage] = useState<string | null>(null);
-  const [pendingCertificateFile, setPendingCertificateFile] = useState<File | null>(null);
   const certificateInputRef = useRef<HTMLInputElement>(null);
-  const directoryInputRef = useRef<HTMLInputElement>(null);
-
-  const acquisition = devices.find((device) => device.id === acquisitionId);
+  const forensicImages = images.filter((image) => image.format === "FORENSWEEP_FORENSIC_ARCHIVE" || image.filename.endsWith(".forensic.zip"));
   const blocked = false;
-  const recoveryTarget = acquisition ? { deviceId: acquisition.id } : acquisitionId ? { imageId: acquisitionId } : {};
+  const recoveryTarget = acquisitionId ? { imageId: acquisitionId } : {};
   const sanitizedCertificates = certificates.filter((certificate) => certificate.verificationResult);
-  const acquisitionCount = devices.length + images.length;
-  const selectedAcquisition = acquisition ?? images.find((image) => image.id === acquisitionId);
+  const acquisitionCount = forensicImages.length;
+  const selectedAcquisition = forensicImages.find((image) => image.id === acquisitionId);
 
   useEffect(() => {
     const certificateId = new URLSearchParams(window.location.search).get("certificateId");
@@ -48,20 +40,9 @@ export default function NewRecoveryPage() {
   }, []);
 
   useEffect(() => {
-    directoryInputRef.current?.setAttribute("webkitdirectory", "");
-  }, []);
-
-  useEffect(() => {
-    const certificate = certificates.find((item) => item.id === authorizationCertificateId);
-    if (certificate?.targetDeviceId) setAcquisitionId(certificate.targetDeviceId);
-  }, [authorizationCertificateId, certificates]);
-
-  useEffect(() => {
-    if (!acquisitionId || !pendingCertificateFile) return;
-    const file = pendingCertificateFile;
-    setPendingCertificateFile(null);
-    void parseCertificateFile(file);
-  }, [acquisitionId, pendingCertificateFile]);
+    if (!acquisitionId || !uploadedCertificate || certificateUploadState !== "idle") return;
+    void verifyUploadedCertificate(uploadedCertificate);
+  }, [acquisitionId, uploadedCertificate, certificateUploadState]);
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -69,7 +50,7 @@ export default function NewRecoveryPage() {
     try {
       if (!acquisitionId) throw new Error("Select an acquisition first.");
       const job = await createRecoveryJob({
-        ...(acquisition ? { deviceId: acquisition.id } : { imageId: acquisitionId }),
+        imageId: acquisitionId,
         scanType: scanType.toUpperCase() as "QUICK" | "DEEP",
         ...(authorizationCertificateId ? { certificateId: authorizationCertificateId } : {}),
         ...(uploadedCertificate ? { certificateVerification: uploadedCertificate } : {}),
@@ -86,31 +67,31 @@ export default function NewRecoveryPage() {
     setCertificateUploadState("parsing");
     setCertificateUploadMessage(null);
     setUploadedCertificate(undefined);
+    let parsed: { payload: Record<string, unknown>; contentHash: string; signature: string };
     try {
-      if (!acquisitionId) {
-        setPendingCertificateFile(file);
-        setCertificateUploadState("idle");
-        setCertificateUploadMessage("Certificate selected. Choose a recovery source to verify it against this target.");
-        return;
-      }
-      let parsed: { payload: Record<string, unknown>; contentHash: string; signature: string };
       if (file.name.toLowerCase().endsWith(".json")) {
-        parsed = JSON.parse(await file.text()) as typeof parsed;
+        const exported = JSON.parse(await file.text()) as { data?: typeof parsed } & typeof parsed;
+        parsed = exported.data ?? exported;
       } else if (file.name.toLowerCase().endsWith(".pdf")) {
         const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@6.3.289/legacy/build/pdf.worker.min.mjs";
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
         const attachments = await pdf.getAttachments();
         const attachmentValues = (attachments instanceof Map ? [...attachments.values()] : Object.values(attachments ?? {})) as Array<{ filename?: string; content?: Uint8Array }>;
-        const attachment = attachmentValues.find((item) => item.filename === "forensweep-certificate.json" && item.content);
+        const attachment = attachmentValues.find((item) => item.filename?.toLowerCase().endsWith(".json") && item.content);
         if (attachment?.content) {
-          parsed = JSON.parse(new TextDecoder().decode(attachment.content)) as typeof parsed;
+          const exported = JSON.parse(new TextDecoder().decode(attachment.content)) as { data?: typeof parsed } & typeof parsed;
+          parsed = exported.data ?? exported;
         } else {
           const metadata = await pdf.getMetadata();
-          const info = metadata.info as Record<string, unknown>;
+          const info = (metadata.info ?? {}) as Record<string, unknown>;
           const subject = typeof info.Subject === "string" ? info.Subject : "";
           const encoded = subject.startsWith("ForenSweep-Certificate:") ? subject.slice("ForenSweep-Certificate:".length) : "";
           if (!encoded) throw new Error("This PDF does not contain an embedded certificate export. Download the JSON export from the certificate detail page and upload that file instead.");
-          parsed = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0)))) as typeof parsed;
+          const normalizedEncoded = encoded.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+          const paddedEncoded = normalizedEncoded.padEnd(Math.ceil(normalizedEncoded.length / 4) * 4, "=");
+          const exported = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(paddedEncoded), (character) => character.charCodeAt(0)))) as { data?: typeof parsed } & typeof parsed;
+          parsed = exported.data ?? exported;
         }
       } else {
         throw new Error("Unsupported certificate file type.");
@@ -118,9 +99,27 @@ export default function NewRecoveryPage() {
       if (!parsed?.payload || typeof parsed.contentHash !== "string" || typeof parsed.signature !== "string") {
         throw new Error("The file does not contain a certificate export.");
       }
-      const result = await authorizeRecoveryCertificate({ certificate: parsed, target: recoveryTarget });
+    } catch (uploadError) {
+      setCertificateUploadState("unparseable");
+      setCertificateUploadMessage(uploadError instanceof Error ? uploadError.message : "Unable to read this certificate export. Download the JSON export from the Certificates page and try again.");
+      await auditRecoveryCertificateUpload({ outcome: "UNPARSEABLE", target: recoveryTarget, reason: uploadError instanceof Error ? uploadError.message : "parse_failed" }).catch(() => undefined);
+      return;
+    }
+    setUploadedCertificate(parsed);
+    if (!acquisitionId) {
+      setCertificateUploadState("idle");
+      setCertificateUploadMessage("Certificate loaded. Select the matching recovery source in the section above to verify it.");
+      return;
+    }
+    await verifyUploadedCertificate(parsed);
+  }
+
+  async function verifyUploadedCertificate(certificate: { payload: Record<string, unknown>; contentHash: string; signature: string }) {
+    setCertificateUploadState("parsing");
+    setCertificateUploadMessage(null);
+    try {
+      const result = await authorizeRecoveryCertificate({ certificate, target: recoveryTarget });
       if (result.state === "VALID") {
-        setUploadedCertificate(parsed);
         setCertificateUploadState("valid");
         setCertificateUploadMessage(`Certificate verified — ${result.targetDisplayName ?? "target"} sanitized on ${result.issuedAt ? new Date(result.issuedAt).toLocaleDateString() : "the recorded date"}.`);
       } else if (result.state === "MISMATCHED") {
@@ -130,10 +129,10 @@ export default function NewRecoveryPage() {
         setCertificateUploadState("invalid");
         setCertificateUploadMessage("This file could not be verified as an authentic ForenSweep certificate — signature does not match.");
       }
-    } catch (uploadError) {
+    } catch (verificationError) {
       setCertificateUploadState("unparseable");
-      setCertificateUploadMessage(uploadError instanceof Error && uploadError.message.startsWith("Select the recovery") ? uploadError.message : "This doesn't look like a certificate export — upload the .json or .pdf you downloaded from the Certificates page.");
-      await auditRecoveryCertificateUpload({ outcome: "UNPARSEABLE", target: recoveryTarget, reason: uploadError instanceof Error ? uploadError.message : "parse_failed" }).catch(() => undefined);
+      setCertificateUploadMessage(verificationError instanceof Error ? verificationError.message : "Unable to verify this certificate against the selected recovery source.");
+      await auditRecoveryCertificateUpload({ outcome: "UNPARSEABLE", target: recoveryTarget, reason: verificationError instanceof Error ? verificationError.message : "verification_failed" }).catch(() => undefined);
     }
   }
 
@@ -144,43 +143,8 @@ export default function NewRecoveryPage() {
     if (file) void parseCertificateFile(file);
   }
 
-  async function handleSourceSelect(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    const firstFile = files[0];
-    if (!firstFile) return;
-    setUploading(true);
-    setUploadProgress(0);
-    setError(null);
-    try {
-      const isSingleImage = files.length === 1 && /\.(img|zip)$/i.test(firstFile.name);
-      const entries: Record<string, Uint8Array> = {};
-      if (!isSingleImage) {
-        for (const file of files) {
-          entries[file.webkitRelativePath || file.name] = new Uint8Array(await file.arrayBuffer());
-        }
-      }
-      const upload = isSingleImage
-        ? firstFile
-        : new File(
-            [zipSync(entries)],
-            "local-source.zip",
-            { type: "application/zip" },
-          );
-      const result = await uploadAcquisition(upload, setUploadProgress);
-      setAcquisitionId(result.acquisitionId);
-      await queryClient.invalidateQueries({ queryKey: ["available-images"] });
-      setError(isSingleImage ? null : "Local files were packaged into a recovery source. Results may not represent deleted-file recovery from an original disk image.");
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Upload failed. Check file type and size.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
   return (
-    <div className="max-w-2xl">
+    <div className="w-full max-w-5xl">
       <SectionHeading eyebrow="Forensic recovery" title="Recover deleted files" />
 
       <DataCard className="mb-4">
@@ -216,57 +180,25 @@ export default function NewRecoveryPage() {
 
       <DataCard className="mb-4">
         <p className="mb-3 text-[15px] font-medium text-ink">
-          Select a verified acquisition
+          Select a forensic archive
         </p>
         <p className="mb-3 text-[13px] text-body-muted">
-          Recovery only runs against a bit-for-bit forensic image whose hash
-          has been verified — never against a live device directly.
+          Recovery runs against the named forensic archive preserved before erasure. It contains the original files, paths, and hashes.
         </p>
-        <label className="mb-3 block rounded border border-dashed border-recovery/50 bg-recovery-soft px-3 py-2.5 text-sm text-ink">
-          <span className="font-medium">Choose a forensic image, files, or a whole folder</span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery" onClick={() => document.getElementById("recovery-source-files")?.click()} disabled={uploading}>Choose files</button>
-            <button type="button" className="rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery" onClick={() => directoryInputRef.current?.click()} disabled={uploading}>Choose folder</button>
-          </div>
-          <input id="recovery-source-files" className="sr-only" type="file" accept=".img,.zip,*/*" multiple onChange={handleSourceSelect} disabled={uploading} />
-          <input ref={directoryInputRef} className="sr-only" type="file" multiple onChange={handleSourceSelect} disabled={uploading} />
-          <span className="mt-0.5 block text-xs text-body-muted">Maximum upload size: 500MB. Local files and folders are packaged before upload.</span>
-          {uploading && (
-            <div className="mt-2">
-              <div className="mb-1 flex justify-between text-xs text-body-muted"><span>Uploading</span><span>{uploadProgress}%</span></div>
-              <progress className="h-2 w-full accent-recovery" max="100" value={uploadProgress} />
-            </div>
-          )}
-        </label>
-        {selectedAcquisition && !devices.slice(0, 3).some((device) => device.id === acquisitionId) && !images.slice(0, 3).some((image) => image.id === acquisitionId) && (
-          <p className="mb-3 text-[12px] text-body-muted">Selected: <span className="font-medium text-ink">{"model" in selectedAcquisition ? selectedAcquisition.model ?? selectedAcquisition.type : selectedAcquisition.filename}</span></p>
+        {selectedAcquisition && (
+          <p className="mb-3 text-[12px] text-body-muted">Selected: <span className="font-medium text-ink">{selectedAcquisition.filename}</span></p>
         )}
         <div className="flex flex-col gap-2">
           {loadingSources && <p className="text-sm text-body-muted">Loading acquisitions...</p>}
-          {!loadingSources && !devices.length && !images.length && !error && (
-            <p className="text-sm text-body-muted">No verified acquisitions or storage devices detected.</p>
+          {!loadingSources && !forensicImages.length && !error && (
+            <p className="text-sm text-body-muted">No preserved forensic archives found. Complete a file sanitization first.</p>
           )}
           <ExpandableSection
             visibleCount={3}
             totalCount={acquisitionCount}
             renderListAction={(expanded) => (
               <>
-                {devices.slice(0, expanded ? devices.length : 3).map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    disabled={Boolean(a.mounted || a.isSystemDisk)}
-                    onClick={() => setAcquisitionId(a.id)}
-                    className={"flex w-full items-center justify-between rounded border px-4 py-3 text-left transition-colors " + (acquisitionId === a.id ? "border-recovery bg-recovery-soft" : "border-hairline-strong hover:bg-canvas-soft")}
-                  >
-                    <div>
-                      <MonoText>{a.path}</MonoText>
-                      <p className="mt-1 text-[12px] text-body-muted">{a.model ?? a.type}</p>
-                    </div>
-                    <StatusBadge label={a.mounted || a.isSystemDisk ? "Unavailable" : "Device"} tone={a.mounted || a.isSystemDisk ? "warning" : "success"} />
-                  </button>
-                ))}
-                {images.slice(0, expanded ? images.length : Math.max(0, 3 - devices.length)).map((image) => (
+                {forensicImages.slice(0, expanded ? forensicImages.length : 3).map((image) => (
                   <button
                     key={image.id}
                     type="button"
@@ -277,7 +209,7 @@ export default function NewRecoveryPage() {
                       <p className="text-[14px] font-medium text-ink">{image.filename}</p>
                       <p className="mt-1 text-[12px] text-body-muted">{formatBytes(image.sizeBytes)}</p>
                     </div>
-                    <StatusBadge label="Image" tone="success" />
+                    <StatusBadge label="Forensic archive" tone="success" />
                   </button>
                 ))}
               </>
@@ -337,7 +269,7 @@ export default function NewRecoveryPage() {
           {certificateUploadState === "parsing" ? "Parsing and verifying certificate…" : certificateUploadState === "dragging" ? "Drop certificate file here" : "Drop certificate file here, or click to browse — .json or .pdf"}
         </div>
         {certificateUploadMessage && (
-          <p className={`mt-3 rounded border p-3 text-[13px] ${certificateUploadState === "valid" ? "border-success/30 bg-success-soft text-success" : certificateUploadState === "mismatched" ? "border-warning/30 bg-warning-soft text-warning" : "border-destructive/30 bg-destructive-soft text-destructive-active"}`} role="status">
+          <p className={`mt-3 rounded border p-3 text-[13px] ${certificateUploadState === "valid" ? "border-success/30 bg-success-soft text-success" : certificateUploadState === "mismatched" ? "border-warning/30 bg-warning-soft text-warning" : certificateUploadState === "idle" ? "border-hairline-strong bg-canvas-soft text-body-muted" : "border-destructive/30 bg-destructive-soft text-destructive-active"}`} role="status">
             {certificateUploadState === "valid" ? "✓ " : ""}{certificateUploadMessage}
           </p>
         )}

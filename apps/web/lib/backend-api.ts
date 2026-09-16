@@ -47,7 +47,7 @@ export async function getAvailableImages(): Promise<AvailableImage[]> {
   return apiFetch<AvailableImage[]>("/api/acquisitions/available-images");
 }
 
-export function uploadAcquisition(file: File, onProgress: (progress: number) => void): Promise<{ acquisitionId: string }> {
+export function uploadAcquisition(file: File, onProgress: (progress: number) => void): Promise<{ acquisitionId: string; filename?: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
@@ -57,8 +57,8 @@ export function uploadAcquisition(file: File, onProgress: (progress: number) => 
     };
     xhr.onload = () => {
       try {
-        const payload = JSON.parse(xhr.responseText) as { data?: { acquisitionId?: string }; error?: { message?: string } };
-        if (xhr.status >= 200 && xhr.status < 300 && payload.data?.acquisitionId) resolve({ acquisitionId: payload.data.acquisitionId });
+        const payload = JSON.parse(xhr.responseText) as { data?: { acquisitionId?: string; filename?: string }; error?: { message?: string } };
+        if (xhr.status >= 200 && xhr.status < 300 && payload.data?.acquisitionId) resolve({ acquisitionId: payload.data.acquisitionId, filename: payload.data.filename });
         else reject(new Error(payload.error?.message ?? `Upload failed with status ${xhr.status}`));
       } catch {
         reject(new Error("Upload failed with an invalid server response"));
