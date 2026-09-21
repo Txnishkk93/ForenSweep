@@ -36,8 +36,9 @@ def validate_image_target(raw_path: str, safe_root: Path) -> Path:
     candidate = Path(raw_path)
     if raw_path.startswith("SAFE_IMAGE_ROOT/"):
         candidate = safe_root / raw_path.removeprefix("SAFE_IMAGE_ROOT/")
-    if candidate.is_symlink() or candidate.is_dir() or candidate.suffix.lower() != ".img":
-        raise ValueError("Only regular .img files are allowed")
+    allowed_suffixes = {".img", ".forensic.zip"}
+    if candidate.is_symlink() or candidate.is_dir() or candidate.name.lower().endswith(tuple(sorted(allowed_suffixes, key=len, reverse=True))) is False:
+        raise ValueError("Only regular .img and .forensic.zip files are allowed")
     if any(parent.is_symlink() for parent in candidate.parents):
         raise ValueError("Symlinked image paths are not allowed")
     resolved = candidate.resolve(strict=True)

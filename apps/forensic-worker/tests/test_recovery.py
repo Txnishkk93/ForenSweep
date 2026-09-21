@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from forensweep_worker.jobs.erase_job import validate_image_target
 from forensweep_worker.jobs.recover_job import run_recovery
 from forensweep_worker.recovery.carver import scan_and_carve
 from forensweep_worker.recovery.confidence import score_confidence
@@ -54,6 +55,13 @@ def test_deep_recovery_dispatches_with_recorded_scan_type(tmp_path: Path) -> Non
     with patch("forensweep_worker.jobs.recover_job.scan_and_carve", fake_scan):
         run_recovery("9f3b0059-841c-4210-92c3-fc2c6d648c4e", config, FakeClient())
     assert calls == [(source.resolve(), "DEEP")]
+
+
+def test_validate_image_target_accepts_forensic_archive(tmp_path: Path) -> None:
+    archive = tmp_path / "MyDocuments.forensic.zip"
+    archive.write_bytes(b"not-real-zip-yet")
+
+    assert validate_image_target(str(archive), tmp_path) == archive.resolve()
 
 
 def test_local_file_archive_uses_selected_folder_name_and_unique_suffix(tmp_path: Path) -> None:
