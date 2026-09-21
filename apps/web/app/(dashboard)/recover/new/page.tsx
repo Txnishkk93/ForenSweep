@@ -9,6 +9,7 @@ import { DataCard, SectionHeading, MonoText } from "@/components/Primitives";
 import { ExpandableSection } from "@/components/ExpandableSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authorizeRecoveryCertificate, auditRecoveryCertificateUpload, createRecoveryJob, getAvailableImages, getCertificates } from "@/lib/backend-api";
+import { findArchiveForCertificate, resolveRecoverySelection } from "@/lib/recovery-selection";
 import { formatBytes } from "@/lib/status-colors";
 import type { Certificate } from "@/lib/types";
 
@@ -35,9 +36,15 @@ export default function NewRecoveryPage() {
   const selectedAcquisition = forensicImages.find((image) => image.id === acquisitionId);
 
   useEffect(() => {
-    const certificateId = new URLSearchParams(window.location.search).get("certificateId");
-    if (certificateId) setAuthorizationCertificateId(certificateId);
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const selection = resolveRecoverySelection({
+      images,
+      certificates,
+      searchParams: Object.fromEntries(params.entries()),
+    });
+    if (selection.acquisitionId) setAcquisitionId(selection.acquisitionId);
+    if (selection.authorizationCertificateId) setAuthorizationCertificateId(selection.authorizationCertificateId);
+  }, [images, certificates]);
 
   useEffect(() => {
     if (!acquisitionId || !uploadedCertificate || certificateUploadState !== "idle") return;
@@ -164,12 +171,20 @@ export default function NewRecoveryPage() {
                       <p className="truncate text-[14px] font-medium text-ink">{certificate.targetDisplayName ?? "Sanitized target"}</p>
                       <p className="text-[12px] text-body-muted">{certificate.method} · {certificate.standard} · {new Date(certificate.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <Link
-                      href={`/recover/new?certificateId=${certificate.id}`}
-                      className="shrink-0 rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery hover:bg-recovery-soft"
-                    >
-                      Recover
-                    </Link>
+                    {(() => {
+                      const archive = findArchiveForCertificate(forensicImages, certificate);
+                      const params = new URLSearchParams();
+                      if (archive) params.set("archiveId", archive.id);
+                      params.set("certificateId", certificate.id);
+                      return (
+                        <Link
+                          href={`/recover/new?${params.toString()}`}
+                          className="shrink-0 rounded border border-recovery px-3 py-1.5 text-[13px] font-medium text-recovery hover:bg-recovery-soft"
+                        >
+                          Recover
+                        </Link>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
