@@ -21,6 +21,19 @@ def _job_directory(root: Path, job_id: str) -> Path:
     return (root / "recovery" / job_id).resolve()
 
 
+def _canonical_recovered_file_type(file_name: str) -> str:
+    suffix = Path(file_name).suffix.lower()
+    mapping = {
+        ".jpg": "JPEG",
+        ".jpeg": "JPEG",
+        ".png": "PNG",
+        ".pdf": "PDF",
+        ".zip": "ZIP",
+        ".docx": "DOCX",
+    }
+    return mapping.get(suffix, "ZIP")
+
+
 def _recover_forensic_archive(source: Path, output_dir: Path, max_candidates: int) -> list[dict[str, object]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(source) as archive:
@@ -44,7 +57,7 @@ def _recover_forensic_archive(source: Path, output_dir: Path, max_candidates: in
             target = output_dir / f"{len(results):08d}-{safe_name}"
             target.write_bytes(data)
             size = len(data)
-            file_type = Path(file_name).suffix.lstrip(".").upper() or "FILE"
+            file_type = _canonical_recovered_file_type(file_name)
             results.append({
                 "fileName": file_name,
                 "fileType": file_type,
@@ -62,7 +75,7 @@ def _recover_forensic_archive(source: Path, output_dir: Path, max_candidates: in
                 "storedPath": str(target),
                 "previewPath": None,
                 "previewAvailable": False,
-                "fragmentationStatus": "NOT_APPLICABLE",
+                "fragmentationStatus": "NOT_ATTEMPTED",
             })
             offset += size
         return results
