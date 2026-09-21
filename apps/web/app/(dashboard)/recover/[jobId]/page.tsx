@@ -6,7 +6,7 @@ import { DataCard, MonoText, SectionHeading } from "@/components/Primitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
 import { downloadRecoveredFile, exportRecoveredFile, getJob, getRecoveredFiles } from "@/lib/backend-api";
-import { saveBytesToDisk } from "@/lib/save-file";
+import { saveBytesToDisk, saveFilesToDirectory } from "@/lib/save-file";
 import { confidenceTone, formatBytes } from "@/lib/status-colors";
 import type { RecoveredFile } from "@/lib/types";
 
@@ -161,13 +161,36 @@ export default function RecoveryJobDetailPage({
       : files;
     if (!filesToExport.length) return;
     setError(null);
+    setExportProgress(`Preparing export for ${filesToExport.length} recovered file${filesToExport.length === 1 ? "" : "s"}...`);
+
     try {
-      for (const [index, file] of filesToExport.entries()) {
-        setExportProgress(`Exporting ${index + 1} of ${filesToExport.length}...`);
-        await exportRecoveredFile(file.id);
-        const blob = await downloadRecoveredFile(params.jobId, file.id);
-        await saveBytesToDisk(file.fileName ?? `recovered-${file.id}`, blob);
+      const resolvedFiles = await Promise.allSettled(
+        filesToExport.map(async (file) => {
+          setExportProgress(`Downloading ${file.fileName ?? "recovered file"} (${filesToExport.indexOf(file) + 1}/${filesToExport.length})...`);
+          await exportRecoveredFile(file.id);
+          const blob = await downloadRecoveredFile(params.jobId, file.id);
+          return { filename: file.fileName ?? `recovered-${file.id}`, data: blob };
+        }),
+      );
+
+      const successful = resolvedFiles
+        .filter((result): result is PromiseFulfilledResult<{ filename: string; data: Blob }> => result.status === "fulfilled")
+        .map((result) => result.value);
+
+      const failures = resolvedFiles
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => result.reason instanceof Error ? result.reason.message : "Unknown export error");
+
+      if (successful.length === 0) {
+        throw new Error(failures[0] ?? "Unable to export recovered files.");
       }
+
+      const output = await saveFilesToDirectory(successful, `${params.jobId}-recovered-files.zip`);
+      if (output.failed.length > 0 || failures.length > 0) {
+        const combined = [...failures, ...output.failed];
+        setError(combined.length ? `Exported ${output.written} file${output.written === 1 ? "" : "s"} with ${combined.length} failure${combined.length === 1 ? "" : "s"}: ${combined.slice(0, 3).join("; ")}` : null);
+      }
+
       setSelectedIds(new Set());
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to export recovered files.");
