@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from shutil import copyfile
 from typing import Any
@@ -92,6 +93,44 @@ def run_erase(job_id: str, config: Config, client: WorkerApiClient) -> None:
         client.certificate(certificate)
 
 
+def build_forensic_archive_name(raw_targets: list[str], output_root: Path | None = None) -> str:
+    selected_names: list[str] = []
+    for raw_target in raw_targets:
+        candidate = Path(raw_target)
+        if candidate.name and candidate.name not in {".", "/"}:
+            if candidate.exists() and candidate.is_dir():
+                selected_names.append(candidate.name)
+            elif candidate.exists() and candidate.is_file():
+                parent_name = candidate.parent.name
+                if parent_name and parent_name not in {".", "/"}:
+                    selected_names.append(parent_name)
+            else:
+                selected_names.append(candidate.name)
+        parent_name = candidate.parent.name
+        if parent_name and parent_name not in {".", "/"} and parent_name not in selected_names:
+            selected_names.append(parent_name)
+    base_name = "forensic-archive"
+    if selected_names:
+        preferred = next((name for name in selected_names if name and name not in {".", "/"}), None)
+        if preferred:
+            base_name = preferred
+    base_name = Path(base_name).name
+    sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1F]+', "_", base_name).strip(" .")
+    sanitized = sanitized or "forensic-archive"
+    if sanitized.lower().endswith(".forensic.zip"):
+        sanitized = sanitized[: -len(".forensic.zip")]
+    if sanitized.lower().endswith(".zip"):
+        sanitized = sanitized[: -len(".zip")]
+    stem = sanitized
+    directory = output_root or Path.cwd()
+    candidate = directory / f"{stem}.forensic.zip"
+    suffix = 1
+    while candidate.exists():
+        candidate = directory / f"{stem} ({suffix}).forensic.zip"
+        suffix += 1
+    return candidate.name
+
+
 def run_local_file_erase(
     job_id: str, config: Config, client: WorkerApiClient, context_data: dict[str, Any]
 ) -> None:
@@ -118,9 +157,9 @@ def run_local_file_erase(
     if failures or not targets:
         client.fail(job_id, {"message": "No valid file targets were available to create a forensic image", "errorCode": "FORENSIC_IMAGE_SOURCE_INVALID", "detail": {"failures": failures}})
         return
-    forensic_image_path = config.safe_image_root / f"files-sanitized-forensic-{job_id[:8]}.forensic.zip"
-    temporary_archive_path = config.safe_image_root / f"files-sanitized-forensic-{job_id[:8]}.forensic.zip.tmp"
     config.safe_image_root.mkdir(parents=True, exist_ok=True)
+    forensic_image_path = config.safe_image_root / build_forensic_archive_name(raw_targets, config.safe_image_root)
+    temporary_archive_path = config.safe_image_root / f"{forensic_image_path.name}.tmp"
     manifest: list[dict[str, Any]] = []
     preserved_bytes = 0
     with zipfile.ZipFile(temporary_archive_path, "w", compression=zipfile.ZIP_STORED) as archive:

@@ -54,3 +54,14 @@ def test_deep_recovery_dispatches_with_recorded_scan_type(tmp_path: Path) -> Non
     with patch("forensweep_worker.jobs.recover_job.scan_and_carve", fake_scan):
         run_recovery("9f3b0059-841c-4210-92c3-fc2c6d648c4e", config, FakeClient())
     assert calls == [(source.resolve(), "DEEP")]
+
+
+def test_local_file_archive_uses_selected_folder_name_and_unique_suffix(tmp_path: Path) -> None:
+    from forensweep_worker.jobs.erase_job import build_forensic_archive_name
+
+    first = build_forensic_archive_name([str(tmp_path / "MyDocuments")], tmp_path)
+    assert first == "MyDocuments.forensic.zip"
+
+    (tmp_path / first).write_bytes(b"existing")
+    second = build_forensic_archive_name([str(tmp_path / "MyDocuments")], tmp_path)
+    assert second == "MyDocuments (1).forensic.zip"
